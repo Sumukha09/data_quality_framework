@@ -275,5 +275,4 @@ class DataValidator:
                 "integrity_fail_indices": integrity_fail_indices
             }
         }
-        
         return report

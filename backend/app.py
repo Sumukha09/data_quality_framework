@@ -175,6 +175,32 @@ async def index():
         return FileResponse(html_path)
     raise HTTPException(status_code=404, detail="Legacy dashboard not found")
 
+@app.get("/api/eda-profile", summary="Serve EDA Profile Report")
+async def get_eda_profile():
+    profile_path = os.path.join(PROCESSED_DIR, "eda_profile.html")
+
+
+    if os.path.exists(profile_path):
+        return FileResponse(profile_path, media_type="text/html")
+
+
+    if os.path.exists(CLEANED_PARQUET):
+        try:
+            import pandas as pd
+            from reporting.profiler import DataProfiler
+
+            print("[*] EDA Profile not found — generating on-the-fly...")
+            df = pd.read_parquet(CLEANED_PARQUET)
+            profiler = DataProfiler()
+            result = profiler.generate(df, title="Gesix EDA Profile")
+            if result and os.path.exists(profile_path):
+                return FileResponse(profile_path, media_type="text/html")
+        except Exception as e:
+            print(f"[!] On-the-fly EDA generation failed: {e}")
+            raise HTTPException(status_code=500, detail=f"EDA Profile generation failed: {str(e)}")
+
+    raise HTTPException(status_code=404, detail="No cleaned data available. Run an analysis first.")
+
 @app.get("/{path:path}", include_in_schema=False)
 async def catch_all(path: str):
     """Catch-all route to serve index.html for React SPA routing."""
@@ -191,6 +217,8 @@ async def catch_all(path: str):
         status_code=404, 
         content={"message": "Dashboard not found. Ensure the frontend is built: `cd frontend && npm run build`"}
     )
+
+
 
 if __name__ == "__main__":
     import uvicorn

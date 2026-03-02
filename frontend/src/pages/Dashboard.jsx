@@ -4,21 +4,37 @@ import { getReport, processData, getRawData } from '../api';
 import { downloadPropertiesPdf } from '../pdfExport';
 import './Dashboard.css';
 
-function DimCard({ name, score }) {
-  const status = score >= 90 ? 'PASS' : score >= 70 ? 'WARN' : 'FAIL';
-  const reasoning =
-    status === 'PASS'
-      ? 'High reliability.'
-      : status === 'WARN'
-        ? 'Needs attention.'
-        : 'Critical issues found.';
+function DimCard({ name, data }) {
+  const isObject = typeof data === 'object' && data !== null;
+  const score = isObject ? data.score : (typeof data === 'number' ? data : 0);
+
+  const status = isObject && data.status
+    ? data.status
+    : (score >= 90 ? 'PASS' : score >= 70 ? 'WARN' : 'FAIL');
+
+  const reasoning = isObject && (data.ai_impact || data.recommendation)
+    ? (
+      <>
+        {data.ai_impact && <span className="dim-ai-impact" style={{ display: 'block', marginBottom: '8px' }}>{data.ai_impact}</span>}
+        {data.recommendation && <span className="dim-recommendation" style={{ display: 'block' }}><strong>Action:</strong> {data.recommendation}</span>}
+      </>
+    )
+    : (
+      status === 'PASS'
+        ? 'High reliability.'
+        : status === 'WARN'
+          ? 'Needs attention.'
+          : 'Critical issues found.'
+    );
 
   return (
     <div className="dim-card" id={`dim-${name.toLowerCase()}`}>
       <h3>{name}</h3>
       <p>Score: <strong>{score}%</strong></p>
       <p>Status: <span className={`status-${status}`}>{status}</span></p>
-      <p><small>{reasoning}</small></p>
+      <div className="dim-details" style={{ marginTop: '10px', fontSize: '0.85rem', lineHeight: '1.4' }}>
+        {reasoning}
+      </div>
     </div>
   );
 }
@@ -153,9 +169,9 @@ export default function Dashboard() {
           <div className="form-row">
             <div className="form-group source-selector">
               <label htmlFor="source_type">Data Source</label>
-              <select 
-                id="source_type" 
-                value={sourceType} 
+              <select
+                id="source_type"
+                value={sourceType}
                 onChange={handleSourceChange}
                 disabled={processing}
               >
@@ -318,8 +334,8 @@ export default function Dashboard() {
 
           <section className="dimensions-grid">
             {report.dimensions && typeof report.dimensions === 'object' &&
-              Object.entries(report.dimensions).map(([name, score]) => (
-                <DimCard key={name} name={name} score={score} />
+              Object.entries(report.dimensions).map(([name, data]) => (
+                <DimCard key={name} name={name} data={data} />
               ))}
           </section>
         </>
@@ -357,9 +373,18 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
-            <button type="button" className="btn-download-pdf" onClick={handleDownloadPdf}>
-              Export Quality Report (PDF)
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="button" className="btn-download-pdf" onClick={handleDownloadPdf}>
+                Export Quality Report (PDF)
+              </button> 
+              <button
+                type="button"
+                className="btn-download-pdf"
+                onClick={() => window.open('http://localhost:8080/api/eda-profile', '_blank')}
+              >
+                View EDA Profile Report
+              </button>
+            </div>
           </>
         ) : (
           <p className="no-generated-data">Initialize a data source to view the dataset preview.</p>

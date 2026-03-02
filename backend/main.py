@@ -1,5 +1,6 @@
 import sys
 import os
+from reporting.profiler import DataProfiler
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -107,6 +108,19 @@ def run_pipeline(start_date=None, end_date=None, source_type="api", source_url=N
         if not cleaned_file:
             print("[!] Remediation failed.")
             return {"status": "Remediation Failed", "total_records": 0, "overall_trustability": 0}
+
+        print("\n Generating EDA Profile Report...")
+        try:
+            import pandas as pd
+            df_for_profile = pd.read_parquet(cleaned_file)
+            profiler = DataProfiler()
+            profile_path = profiler.generate(df_for_profile, title=f"Data Profiling Report")
+            if profile_path:
+                print(f" EDA Profile saved → {profile_path}")
+            else:
+                print(" EDA Profile skipped.")
+        except Exception as e:
+            print(f" EDA Profiling failed (non-fatal): {e}")
 
         sys._last_step = "Validation"
         print("\n[STEP 4/5] Executing Advanced QA Engine (Initial Pass)...")
