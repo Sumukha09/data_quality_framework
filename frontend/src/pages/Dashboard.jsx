@@ -1,399 +1,344 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { getReport, processData, getRawData } from '../api';
+import { getReport, processData } from '../api';
 import { downloadPropertiesPdf } from '../pdfExport';
-import './Dashboard.css';
 
-function DimCard({ name, data }) {
-  const isObject = typeof data === 'object' && data !== null;
-  const score = isObject ? data.score : (typeof data === 'number' ? data : 0);
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { FileUp, ArrowRight, Download, Activity, ExternalLink, Calendar as CalendarIcon, FileText } from 'lucide-react';
+import { format } from 'date-fns';
 
-  const status = isObject && data.status
-    ? data.status
-    : (score >= 90 ? 'PASS' : score >= 70 ? 'WARN' : 'FAIL');
+import { useDashboard } from '../hooks/useDashboard';
+import { INGESTION_METHODS } from '../services/dashboardService';
 
-  const reasoning = isObject && (data.ai_impact || data.recommendation)
-    ? (
-      <>
-        {data.ai_impact && <span className="dim-ai-impact" style={{ display: 'block', marginBottom: '8px' }}>{data.ai_impact}</span>}
-        {data.recommendation && <span className="dim-recommendation" style={{ display: 'block' }}><strong>Action:</strong> {data.recommendation}</span>}
-      </>
-    )
-    : (
-      status === 'PASS'
-        ? 'High reliability.'
-        : status === 'WARN'
-          ? 'Needs attention.'
-          : 'Critical issues found.'
+function StatBlock({ label, value, description, isFail }) {
+    return (
+        <div className={`card-stat group ${isFail ? 'ring-2 ring-destructive/40' : ''}`}>
+            <div>
+                <p className="text-xs tracking-widest uppercase font-semibold text-[var(--stat-card-foreground)] opacity-70 mb-2">{label}</p>
+                <div className="text-4xl md:text-5xl font-serif tracking-tight mb-3 text-[var(--stat-card-foreground)] transition-transform duration-500 group-hover:-translate-y-1">
+                    {value}
+                </div>
+            </div>
+            {description && <p className="text-sm text-[var(--stat-card-foreground)] opacity-90 leading-relaxed max-w-sm">{description}</p>}
+        </div>
     );
-
-  return (
-    <div className="dim-card" id={`dim-${name.toLowerCase()}`}>
-      <h3>{name}</h3>
-      <p>Score: <strong>{score}%</strong></p>
-      <p>Status: <span className={`status-${status}`}>{status}</span></p>
-      <div className="dim-details" style={{ marginTop: '10px', fontSize: '0.85rem', lineHeight: '1.4' }}>
-        {reasoning}
-      </div>
-    </div>
-  );
 }
 
+function DatePicker({ label, value, onChange, disabled }) {
+    return (
+        <div className="space-y-3 flex flex-col">
+            <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground">{label}</Label>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" disabled={disabled} className={`btn-outline w-full ${!value && 'text-muted-foreground'}`}>
+                        <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground opacity-80 dark:text-foreground" />
+                        {value ? format(value, 'PPP') : <span className="text-muted-foreground opacity-80">Pick a date</span>}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={value} onSelect={onChange} initialFocus
+                        className="rounded-lg border border-border" captionLayout="dropdown" />
+                </PopoverContent>
+            </Popover>
+        </div>
+    );
+}
+
+function EmptyState({ title, message }) {
+    return (
+        <div className="container mx-auto px-6 py-24 text-center">
+            <h2 className="text-6xl font-serif italic text-muted-foreground/30 mb-6">{title}</h2>
+            <p className="text-xl text-muted-foreground max-w-md mx-auto">{message}</p>
+        </div>
+    );
+}
+
+
+
 export default function Dashboard() {
-  const [report, setReport] = useState(null);
-  const [rawData, setRawData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState(null);
+    const { report, rawData, processing, error, executeAnalysis, resetDashboard } = useDashboard();
 
-  // Simplified to 3 input methods
-  const [sourceType, setSourceType] = useState('upload');
-  const [sourceUrl, setSourceUrl] = useState('');
-  const [useDateRange, setUseDateRange] = useState(false);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [apiInputMode, setApiInputMode] = useState('link');
-  const [apiKey, setApiKey] = useState('');
-  const [selectedFile, setSelectedFile] = useState(null);
+    const [sourceType, setSourceType] = useState('upload');
+    const [sourceUrl, setSourceUrl] = useState('');
+    const [useDateRange, setUseDateRange] = useState(false);
+    const [startDate, setStartDate] = useState();
+    const [endDate, setEndDate] = useState();
+    const [apiInputMode, setApiInputMode] = useState('link');
+    const [apiKey, setApiKey] = useState('');
+    const [selectedFile, setSelectedFile] = useState(null);
 
-  const isUpload = sourceType === 'upload';
+    const isUpload = sourceType === 'upload';
+    useEffect(() => { resetDashboard(); }, [resetDashboard]);
 
-  useEffect(() => {
-    setReport(null);
-    setRawData([]);
-    setLoading(false);
-  }, []);
+    const isFormValid = () => {
+        if (isUpload) return !!selectedFile;
+        const hasUrl = sourceUrl.trim().length > 0;
+        const hasKey = (sourceType === 'api' && apiInputMode === 'key') ? apiKey.trim().length > 0 : true;
+        return useDateRange ? hasUrl && hasKey && startDate && endDate : hasUrl && hasKey;
+    };
 
-  const handleSourceChange = (e) => {
-    setSourceType(e.target.value);
-    setError(null);
-    setSelectedFile(null);
-    setSourceUrl('');
-    setUseDateRange(false);
-    setStartDate('');
-    setEndDate('');
-    setApiInputMode('link');
-    setApiKey('');
-  };
+    const handleSubmit = async (e) => {
+        e?.preventDefault();
+        await executeAnalysis({
+            sourceType, sourceUrl, useDateRange, startDate, endDate, apiInputMode, apiKey, selectedFile
+        });
+    };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
+    const tableKeys = rawData.length > 0 && typeof rawData[0] === 'object' ? Object.keys(rawData[0]) : [];
+    const isNoData = report?.status === 'No Data Found for this period';
+    const showResults = report && !report.error && !isNoData;
 
-    if (isUpload) {
-      if (!selectedFile) {
-        setError('Please select a file to upload.');
-        return;
-      }
-    } else {
-      if (!sourceUrl) {
-        setError('Please provide a valid Source URL.');
-        return;
-      }
-      if (sourceType === 'api' && apiInputMode === 'key' && !apiKey) {
-        setError('Please provide a valid API Key.');
-        return;
-      }
-      if (useDateRange && (!startDate || !endDate)) {
-        setError('Please select both start and end dates.');
-        return;
-      }
-    }
+    return (
+        <div className="min-h-screen bg-background text-foreground font-sans flex flex-col selection:bg-primary/20">
 
-    setProcessing(true);
-    setReport(null);
-    setRawData([]);
-    try {
-      const data = await processData({
-        sourceType: isUpload ? 'others_upload' : sourceType,
-        sourceUrl,
-        startDate: (!isUpload && useDateRange) ? startDate : '',
-        endDate: (!isUpload && useDateRange) ? endDate : '',
-        apiKey: apiInputMode === 'key' ? apiKey : '',
-        file: isUpload ? selectedFile : null,
-      });
+            {/* ── Form ── */}
+            <main className="flex-1 container mx-auto px-6 py-16 md:py-24">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-24 items-start">
 
-      setReport(data.report);
-      const list = data.raw_data?.data || data.raw_data?.properties || [];
-      setRawData(Array.isArray(list) ? list : []);
-    } catch (e) {
-      setError(e.message);
-      setReport(null);
-      setRawData([]);
-    } finally {
-      setProcessing(false);
-    }
-  };
+                    {/* Left — sticky header + submit */}
+                    <div className="lg:col-span-5 lg:sticky lg:top-32 space-y-10">
+                        <div>
+                            <h1 className="text-5xl md:text-7xl font-serif font-medium tracking-tight leading-[1.1] mb-8">
+                                Run Quality <br /><span className="italic text-muted-foreground">Analysis.</span>
+                            </h1>
+                            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-md">
+                                Configure your data pipeline ingestion source. We will extract, normalize, and score your dataset against the 7-dimensional trust framework.
+                            </p>
+                        </div>
 
-  const handleDownloadPdf = () => {
-    downloadPropertiesPdf(rawData, report);
-  };
+                        <button
+                            onClick={handleSubmit}
+                            disabled={processing || !isFormValid()}
+                            className={`group w-full md:w-auto md:min-w-[300=px] px-8 py-6 text-lg flex items-center gap-3 rounded-full
+                ${processing || !isFormValid()
+                                    ? 'bg-secondary text-muted-foreground cursor-not-allowed border border-border'
+                                    : 'btn-gold'}`}
+                        >
+                            <span>{processing ? 'Processing Dataset...' : 'Execute Pipeline'}</span>
+                            {processing
+                                ? <Activity className="w-6 h-6 animate-spin opacity-70" />
+                                : <ArrowRight className="w-6 h-6 transform group-hover:translate-x-2 transition-transform" />}
+                        </button>
 
-  const isFormValid = () => {
-    if (isUpload) return !!selectedFile;
-    const hasUrl = sourceUrl.trim().length > 0;
-    const hasKey = (sourceType === 'api' && apiInputMode === 'key') ? apiKey.trim().length > 0 : true;
-    if (useDateRange) return hasUrl && hasKey && startDate && endDate;
-    return hasUrl && hasKey;
-  };
+                        {error && (
+                            <p className="text-destructive font-medium bg-destructive/5 px-6 py-4 rounded-xl border border-destructive/20 animate-in fade-in">
+                                {error}
+                            </p>
+                        )}
+                    </div>
 
-  const getValidationMessage = () => {
-    if (isUpload) {
-      if (!selectedFile) return 'Waiting for file upload...';
-      return `${selectedFile.name} ready for analysis.`;
-    }
-    if (sourceType === 'api' && apiInputMode === 'key' && !apiKey) return 'Please enter an API Key.';
-    if (!sourceUrl) return 'Please enter a Source URL.';
-    if (useDateRange && (!startDate || !endDate)) return 'Please select a date range.';
-    return 'Parameters set. Ready to process.';
-  };
+                    {/* Right — form steps */}
+                    <div className="lg:col-span-7 space-y-20 pt-8 lg:pt-0">
 
-  return (
-    <div className="dashboard">
-      <header className="dashboard-header">
-        <h1>Data Trustability Dashboard</h1>
-        <p>AI-Ready Data Quality Framework — powered by Great Expectations</p>
-        <nav>
-          <Link to="/">Home</Link>
-        </nav>
-      </header>
+                        {/* Step 01 — Ingestion method */}
+                        <div className="space-y-8 animate-in slide-in-from-bottom-8 fade-in duration-700">
+                            <h3 className="text-2xl font-serif">01. Select Ingestion Method</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                {INGESTION_METHODS.map(({ id, icon: Icon, label, desc }) => (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        onClick={() => setSourceType(id)}
+                                        className={`flex flex-col items-start p-6 rounded-3xl border transition-all duration-300 text-left
+                      ${sourceType === id
+                                                ? 'border-foreground bg-foreground/5 shadow-inner'
+                                                : 'border-border/60 hover:border-foreground/30 hover:bg-secondary/20'}`}
+                                    >
+                                        <Icon className={`w-6 h-6 mb-4 ${sourceType === id ? 'text-foreground' : 'text-muted-foreground'}`} />
+                                        <span className="font-semibold text-lg mb-1">{label}</span>
+                                        <span className="text-sm text-muted-foreground">{desc}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
-      <section className="control-panel">
-        <div className="panel-header">
-          <h3>Run New Analysis</h3>
-          <span className={`validation-badge ${isFormValid() ? 'valid' : 'invalid'}`}>
-            {getValidationMessage()}
-          </span>
-        </div>
-        <form onSubmit={handleSubmit} className="dashboard-form">
-          <div className="form-row">
-            <div className="form-group source-selector">
-              <label htmlFor="source_type">Data Source</label>
-              <select
-                id="source_type"
-                value={sourceType}
-                onChange={handleSourceChange}
-                disabled={processing}
-              >
-                <option value="upload">📂 File Upload (Any Format)</option>
-                <option value="api">🌐 Dynamic API (Custom Endpoint)</option>
-                <option value="scraping">🔍 Web Scraper (Target URL)</option>
-              </select>
-            </div>
+                        {/* Step 02 — Configure source */}
+                        <div className="space-y-8 animate-in slide-in-from-bottom-8 fade-in duration-700 delay-150">
+                            <h3 className="text-2xl font-serif">02. Configure Source</h3>
 
-            {sourceType === 'api' && (
-              <div className="radio-group-horizontal">
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="apiMode"
-                    value="link"
-                    checked={apiInputMode === 'link'}
-                    onChange={() => setApiInputMode('link')}
-                    disabled={processing}
-                  />
-                  Public API (Link Only)
-                </label>
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="apiMode"
-                    value="key"
-                    checked={apiInputMode === 'key'}
-                    onChange={() => setApiInputMode('key')}
-                    disabled={processing}
-                  />
-                  Secured API (Key Required)
-                </label>
-              </div>
-            )}
-          </div>
+                            {isUpload ? (
+                                <div className="relative group rounded-2xl border-2 border-dashed border-border/60 hover:border-gold/60 bg-secondary/10 hover:bg-secondary/20 transition-all duration-300 w-full max-w-lg overflow-hidden">
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-6 text-center">
+                                        <div className={`h-12 w-12 rounded-full ${selectedFile ? 'bg-gold/20' : 'bg-primary/10'} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500`}>
+                                            {selectedFile ? <FileText className="h-6 w-6 text-gold" /> : <FileUp className="h-6 w-6 text-primary" />}
+                                        </div>
+                                        <p className="text-sm font-medium text-foreground mb-1">
+                                            {selectedFile ? selectedFile.name : 'Click to upload dataset'}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {selectedFile ? 'Ready for processing' : 'CSV, JSON, PDF files supported'}
+                                        </p>
+                                    </div>
+                                    <Input type="file" onChange={(e) => setSelectedFile(e.target.files[0])}
+                                        disabled={processing} className="opacity-0 w-full h-40 cursor-pointer" />
+                                </div>
+                            ) : (
+                                <div className="space-y-12">
+                                    <div>
+                                        <Label className="form-label">Target URL</Label>
+                                        <Input
+                                            type="url"
+                                            placeholder={sourceType === 'api' ? 'https://api.example.com/v1/data' : 'https://example.com/portal'}
+                                            value={sourceUrl}
+                                            onChange={(e) => setSourceUrl(e.target.value)}
+                                            disabled={processing}
+                                            className="input-field max-w-lg"
+                                        />
+                                    </div>
 
-          <div className="form-row">
-            {!isUpload && (
-              <div className="form-group url-input">
-                <label htmlFor="source_url">Source URL</label>
-                <input
-                  type="text"
-                  id="source_url"
-                  placeholder={sourceType === 'api' ? "https://api.example.com/v1/data" : "https://example.com/portal"}
-                  value={sourceUrl}
-                  onChange={(e) => setSourceUrl(e.target.value)}
-                  disabled={processing}
-                />
-              </div>
-            )}
+                                    {sourceType === 'api' && (
+                                        <div className="space-y-6">
+                                            <Label className="form-label">Security Authorization</Label>
+                                            <RadioGroup value={apiInputMode} onValueChange={setApiInputMode} disabled={processing} className="flex gap-8">
+                                                {[{ value: 'link', label: 'Public Endpoint' }, { value: 'key', label: 'Secured Endpoint (Key required)' }].map(({ value, label }) => (
+                                                    <div key={value} className="flex items-center space-x-3">
+                                                        <RadioGroupItem value={value} id={`api-${value}`} className="w-5 h-5 border-2" />
+                                                        <Label htmlFor={`api-${value}`} className="text-base cursor-pointer">{label}</Label>
+                                                    </div>
+                                                ))}
+                                            </RadioGroup>
 
-            {sourceType === 'api' && apiInputMode === 'key' && (
-              <div className="form-group key-input">
-                <label htmlFor="api_key">Authentication Key</label>
-                <input
-                  type="password"
-                  id="api_key"
-                  placeholder="Bearer token or x-api-key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  disabled={processing}
-                />
-              </div>
-            )}
+                                            {apiInputMode === 'key' && (
+                                                <div className="mt-8 animate-in fade-in zoom-in-95">
+                                                    <Input type="password" placeholder="Bearer token or x-api-key"
+                                                        value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                                                        disabled={processing} className="input-field font-mono max-w-lg" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
-            {isUpload && (
-              <div className="file-input-group">
-                <div className="form-group">
-                  <label htmlFor="data_file">
-                    Upload Dataset (CSV, Excel, JSON, PDF, Parquet, XML, or any format)
-                  </label>
-                  <input
-                    type="file"
-                    id="data_file"
-                    accept="*"
-                    onChange={(e) => setSelectedFile(e.target.files[0])}
-                    disabled={processing}
-                  />
+                        {/* Step 03 — Timeframe (non-upload only) */}
+                        {!isUpload && (
+                            <div className="space-y-8 animate-in slide-in-from-bottom-8 fade-in duration-700 delay-300">
+                                <div className="flex flex-col space-y-4">
+                                    <Label htmlFor="date_range" className="text-2xl font-serif cursor-pointer">03. Timeframe Filter</Label>
+                                    <div className="flex items-center space-x-3">
+                                        <Checkbox id="date_range" checked={useDateRange} onCheckedChange={setUseDateRange}
+                                            disabled={processing} className="w-5 h-5 border-2 border-primary rounded-full data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground" />
+                                        <Label htmlFor="date_range" className="form-label mb-0 cursor-pointer">Enable Date Range Filtering</Label>
+                                    </div>
+                                </div>
+
+                                {useDateRange && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pl-10 border-l-2 border-border/40 mt-8">
+                                        <DatePicker label="Period Start" value={startDate} onChange={setStartDate} disabled={processing} />
+                                        <DatePicker label="Period End" value={endDate} onChange={setEndDate} disabled={processing} />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
-              </div>
+            </main>
+
+            {/* ── Results ── */}
+            {showResults && (
+                <section className="border-t border-border mt-12 bg-secondary/10 animate-in fade-in slide-in-from-bottom-16 duration-1000">
+                    <div className="container mx-auto px-6 py-24 md:py-32">
+
+                        {/* Score header */}
+                        <div className="mb-24 md:flex items-end justify-between">
+                            <div>
+                                <Badge variant="outline" className="mb-6 bg-foreground text-background px-4 py-1.5 text-xs tracking-widest uppercase rounded-full border-0">
+                                    {report.status}
+                                </Badge>
+                                <h2 className="text-5xl md:text-8xl font-serif italic tracking-tight mb-4 text-foreground">
+                                    Score: {report.overall_trustability}
+                                </h2>
+                                <p className="text-xl md:text-2xl text-muted-foreground font-serif">Out of 100 possible points.</p>
+                            </div>
+                            <div className="mt-8 md:mt-0 text-left md:text-right">
+                                <p className="text-4xl md:text-5xl font-serif text-foreground mb-2">{report.total_records}</p>
+                                <p className="text-sm tracking-widest uppercase font-semibold text-muted-foreground">Records Processed</p>
+                            </div>
+                        </div>
+
+                        {/* Dimension grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                            {report.dimensions && Object.entries(report.dimensions).map(([name, data]) => {
+                                const isObject = typeof data === 'object' && data !== null;
+                                const score = isObject ? data.score : (typeof data === 'number' ? data : 0);
+                                const isFail = score < 70;
+                                return (
+                                    <StatBlock key={name} label={name} value={`${score}%`} isFail={isFail}
+                                        description={isObject ? data.recommendation : (isFail ? 'Critical issues detected.' : 'Performing nominally under constraints.')} />
+                                );
+                            })}
+                        </div>
+
+                        {/* Raw data table */}
+                        {tableKeys.length > 0 && (
+                            <div className="mt-32">
+                                <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
+                                    <div>
+                                        <h3 className="text-3xl md:text-4xl font-serif tracking-tight mb-4">Ingested Payload</h3>
+                                        <p className="text-lg text-muted-foreground">Raw unified preview with schema alignment applied.</p>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={() => window.open('http://localhost:8080/api/eda-profile', '_blank')}
+                                            className="flex items-center gap-2 text-sm font-semibold tracking-wide uppercase hover:text-primary transition-colors">
+                                            <span>EDA Profile</span><ExternalLink className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => downloadPropertiesPdf(rawData, report)}
+                                            className="flex items-center gap-2 text-sm font-semibold tracking-wide uppercase text-foreground hover:text-primary transition-colors ml-4">
+                                            <span>Download Report</span><Download className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="border border-border/50 rounded-2xl overflow-hidden bg-background">
+                                    <Table>
+                                        <TableHeader className="bg-secondary/30">
+                                            <TableRow className="border-border/50 hover:bg-transparent">
+                                                {tableKeys.map(key => (
+                                                    <TableHead key={key} className="font-semibold text-foreground whitespace-nowrap px-8 py-5 h-auto text-xs uppercase tracking-widest">
+                                                        {key.replace(/_/g, ' ')}
+                                                    </TableHead>
+                                                ))}
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {rawData.map((row, i) => (
+                                                <TableRow key={i} className="border-border/50 hover:bg-secondary/20 transition-colors">
+                                                    {tableKeys.map(key => (
+                                                        <TableCell key={key} className="font-mono text-sm px-8 py-4 max-w-[300px] truncate text-muted-foreground">
+                                                            {row[key] != null ? String(row[key]) : '—'}
+                                                        </TableCell>
+                                                    ))}
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </section>
             )}
-          </div>
 
-          {!isUpload && (
-            <div className="form-row">
-              <div className="form-group toggle-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={useDateRange}
-                    onChange={(e) => setUseDateRange(e.target.checked)}
-                    disabled={processing}
-                  />
-                  Filter by Date Range (Optional)
-                </label>
-                {!useDateRange && (
-                  <p className="hint-text">No range selected. System will fetch baseline (last 15 records).</p>
-                )}
-              </div>
+            {isNoData && (
+                <EmptyState title="Zero Results" message="No records were ingested. Ensure the target source has data or expand the requested time frame." />
+            )}
 
-              {useDateRange && (
-                <div className="date-inputs">
-                  <div className="form-group">
-                    <label htmlFor="start_date">Period Start</label>
-                    <input
-                      type="date"
-                      id="start_date"
-                      name="start_date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      disabled={processing}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="end_date">Period End</label>
-                    <input
-                      type="date"
-                      id="end_date"
-                      name="end_date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      disabled={processing}
-                    />
-                  </div>
+            {report?.error && !error && (
+                <div className="container mx-auto px-6 py-24 text-center">
+                    <h2 className="text-6xl font-serif text-destructive mb-6">Pipeline Failure</h2>
+                    <p className="text-xl text-muted-foreground bg-destructive/5 border border-destructive/20 p-8 rounded-2xl max-w-2xl mx-auto font-mono text-sm inline-block">
+                        {report.error}
+                    </p>
                 </div>
-              )}
-            </div>
-          )}
-
-          <div className="form-row submit-row">
-            <button type="submit" className="btn-process" disabled={processing || !isFormValid()}>
-              {processing ? 'Analyzing Data...' : 'Run Quality Analysis'}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {(error || (report && report.error)) && (
-        <div className="dashboard-error">
-          {error || report.error}
+            )}
         </div>
-      )}
-
-      {loading && !report && !error && (
-        <p className="dashboard-loading">Executing Pipeline...</p>
-      )}
-
-      {report && !report.error && report.status !== 'No Data Found for this period' && (
-        <>
-          <section className="score-box">
-            <div className="score-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2>Framework Trustability: <span id="overall-score">{report.overall_trustability}%</span></h2>
-              <span className="status-badge" style={{ padding: '4px 12px', borderRadius: '20px', background: '#2c3e50', color: 'white', fontSize: '0.9rem', fontWeight: 'bold' }}>
-                {report.status}
-              </span>
-            </div>
-            <p>Total Records Processed: <span id="total-count">{report.total_records}</span></p>
-          </section>
-
-          <section className="dimensions-grid">
-            {report.dimensions && typeof report.dimensions === 'object' &&
-              Object.entries(report.dimensions).map(([name, data]) => (
-                <DimCard key={name} name={name} data={data} />
-              ))}
-          </section>
-        </>
-      )}
-
-      {report && report.status === 'No Data Found for this period' && (
-        <section className="score-box no-data">
-          <h2>No data found</h2>
-          <p>Run an analysis with a different source or date range.</p>
-        </section>
-      )}
-
-      <section className="generated-data-section">
-        <h3>Raw Dataset Preview</h3>
-        <p className="generated-data-hint">Showing ingested records with unified metadata layer.</p>
-        {rawData.length > 0 && rawData[0] && typeof rawData[0] === 'object' ? (
-          <>
-            <div className="table-wrap">
-              <table className="generated-data-table">
-                <thead>
-                  <tr>
-                    {Object.keys(rawData[0]).map(key => (
-                      <th key={key}>{key.replace(/_/g, ' ')}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rawData.map((row, i) => (
-                    <tr key={i}>
-                      {Object.keys(rawData[0]).map(key => (
-                        <td key={key}>{row[key] != null ? String(row[key]) : '—'}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="button" className="btn-download-pdf" onClick={handleDownloadPdf}>
-               Download PDF
-              </button>
-              <button
-                type="button"
-                className="btn-download-pdf"
-                onClick={() => window.open('http://localhost:8080/api/eda-profile', '_blank')}
-              >
-                View EDA Profile Report
-              </button>
-            </div>
-          </>
-        ) : (
-          <p className="no-generated-data">Initialize a data source to view the dataset preview.</p>
-        )}
-      </section>
-
-      <footer className="dashboard-footer">
-        <p>Gesix Data Quality Framework — Powered by Great Expectations</p>
-      </footer>
-    </div>
-  );
+    );
 }

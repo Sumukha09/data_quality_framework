@@ -1,0 +1,140 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Anthropic Sans", BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: ui-serif, Tiermina, Georgia, Cambria, "Times New Roman", Times, serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-slate-purple: var(--slate-purple);
+  --color-slate-purple-foreground: var(--slate-purple-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: #F2EFE9;
+  --foreground: #252627;
+  --card: #F2EFE9;
+  --card-foreground: #252627;
+  --popover: #F2EFE9;
+  --popover-foreground: #252627;
+  --primary: #904E55;
+  --primary-foreground: #F2EFE9;
+  --secondary: #BFB48F;
+  --secondary-foreground: #252627;
+  --muted: #BFB48F;
+  --muted-foreground: #564E58;
+  --accent: #BFB48F;
+  --accent-foreground: #252627;
+  --destructive: #904E55;
+  --border: #BFB48F;
+  --input: #BFB48F;
+  --ring: #904E55;
+  --slate-purple: #564E58;
+  --slate-purple-foreground: #F2EFE9;
+  --gold: #BFB48F;
+  --gold-foreground: #564E58;
+  --stat-card: var(--gold);
+  --stat-card-foreground: var(--gold-foreground);
+}
+
+.dark {
+  --background: #252627;
+  --foreground: #F2EFE9;
+  --card: #252627;
+  --card-foreground: #F2EFE9;
+  --popover: #252627;
+  --popover-foreground: #F2EFE9;
+  --primary: #904E55;
+  --primary-foreground: #F2EFE9;
+  --secondary: #564E58;
+  --secondary-foreground: #F2EFE9;
+  --muted: #564E58;
+  --muted-foreground: #BFB48F;
+  --accent: #564E58;
+  --accent-foreground: #F2EFE9;
+  --destructive: #904E55;
+  --border: #564E58;
+  --input: #564E58;
+  --ring: #904E55;
+  --slate-purple: #564E58;
+  --slate-purple-foreground: #F2EFE9;
+  --gold: #BFB48F;
+  --gold-foreground: #564E58;
+  --stat-card: #564E58;
+  --stat-card-foreground: #F2EFE9;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer components {
+
+  /* Shared button base */
+  .btn-base {
+    @apply flex items-center justify-center rounded-full text-base font-medium shadow-sm transition-all duration-300 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Coloured variants — inline btn-base (Tailwind v4 can't @apply custom classes) */
+  .btn-gold {
+    @apply flex items-center justify-center rounded-full text-base font-medium shadow-sm transition-all duration-300 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-gold text-gold-foreground hover:bg-gold/80 hover:shadow-gold/30;
+  }
+
+  .btn-slate {
+    @apply flex items-center justify-center rounded-full text-base font-medium shadow-sm transition-all duration-300 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-slate-purple text-slate-purple-foreground hover:bg-slate-purple/80 hover:shadow-slate-purple/30;
+  }
+
+  /* Outline keeps its own shape */
+  .btn-outline {
+    @apply flex items-center justify-start text-left font-normal border-0 border-b-2 border-primary/60 rounded-full px-5 py-3 h-auto shadow-sm focus-visible:ring-2 focus-visible:ring-primary transition-colors bg-secondary/10 hover:bg-secondary/20 hover:text-foreground;
+  }
+
+  /* Form */
+  .input-field {
+    @apply w-full text-base border border-border/60 rounded-xl px-4 py-3 h-auto shadow-sm focus-visible:ring-2 focus-visible:ring-secondary transition-colors bg-secondary/10;
+  }
+
+  .form-label {
+    @apply block mb-3 text-xs uppercase tracking-widest font-bold text-muted-foreground;
+  }
+
+  /* Cards */
+  .card-stat {
+    @apply flex flex-col justify-between h-full p-5 md:p-6 rounded-2xl bg-[var(--stat-card)] text-[var(--stat-card-foreground)] transition-all duration-500 hover:shadow-lg hover:scale-[1.02];
+  }
+}
