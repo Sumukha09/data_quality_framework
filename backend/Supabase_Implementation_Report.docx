@@ -1,0 +1,72 @@
+Supabase Implementation Report
+=============================
+
+Prepared for: Gesix Solutions Internship Project
+Date: March 8, 2026
+
+---
+
+1. Project Overview
+-------------------
+- Data Quality Framework with Python backend and React frontend
+- Requirement: Deployable solution with persistent file storage and metadata tracking
+
+2. Storage Architecture Options
+-------------------------------
+
+| Option         | Storage Layer | Metadata DB | Hosting      | Free Tier | Complexity | Open Source |
+|---------------|--------------|-------------|-------------|-----------|------------|-------------|
+| AWS S3 + RDS  | S3           | PostgreSQL  | AWS         | 12 months | High       | No          |
+| Supabase      | Storage      | PostgreSQL  | Supabase    | Forever   | Low        | Yes         |
+| Local + SQLite| File System  | SQLite      | Local/VM    | Forever   | Low        | Yes         |
+
+- S3 is industry standard, but setup is complex and free tier is limited
+- Supabase Storage is S3-compatible, open source, and integrates natively with PostgreSQL
+- Local file system is not suitable for deployment due to ephemeral storage
+
+3. S3 vs Supabase Storage: Technical Comparison
+-----------------------------------------------
+
+| Feature         | AWS S3           | Supabase Storage      |
+|----------------|------------------|----------------------|
+| Protocol       | S3 API           | S3-compatible (MinIO) |
+| Buckets        | Yes              | Yes                  |
+| Object Keys    | Yes              | Yes                  |
+| Public URLs    | Yes              | Yes                  |
+| Open Source    | No               | Yes                  |
+| DB Integration | Separate         | Native (PostgreSQL)  |
+| Free Forever   | No               | Yes                  |
+| Setup Time     | High             | Low                  |
+
+Supabase wraps MinIO (open-source S3 engine) with a simple API and integrates storage and database in one platform.
+
+4. Final Implementation Plan (Supabase)
+---------------------------------------
+
+**Backend:**
+- Use Supabase Storage for file uploads (raw, processed, cleaned)
+- Use Supabase PostgreSQL for metadata (file name, path, type, source, status, size, upload date, URL)
+- Python SDK: `supabase-py` for both storage and DB
+- Deploy backend (FastAPI) on Render.com (free tier)
+
+**Frontend:**
+- Deploy React frontend on Vercel or Netlify (free tier)
+- Connect to backend via API URL
+
+**Key Steps:**
+1. Create Supabase project and storage bucket
+2. Add Supabase URL and API key to `.env`
+3. Update backend:
+   - Replace local file writes with `supabase.storage.upload()`
+   - Replace SQLite with Supabase PostgreSQL for metadata
+   - Add endpoints to fetch file metadata and download files
+4. Deploy backend to Render.com, frontend to Vercel
+
+**Demo Talking Points:**
+- "Supabase Storage is S3-compatible, fully open source, and integrates natively with PostgreSQL."
+- "This architecture is designed for production scalability and avoids vendor lock-in."
+- "Migration to AWS S3 is trivial due to protocol compatibility."
+
+---
+
+Prepared by: GitHub Copilot (GPT-4.1)

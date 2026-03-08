@@ -15,6 +15,7 @@ export function useDashboard() {
   const [edaUrl, setEdaUrl] = useState(null);
   const [rawEdaUrl, setRawEdaUrl] = useState(null);
   const [analysisId, setAnalysisId] = useState(null);
+  const [retrievedRecord, setRetrievedRecord] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,6 +28,7 @@ export function useDashboard() {
     setRawData([]);
     setCleanedData([]);
     setReportUrl(null);
+    setRetrievedRecord(null);
 
     try {
       const payload = buildPayload(formState);
@@ -61,16 +63,19 @@ export function useDashboard() {
   const loadRemoteAnalysis = useCallback(async (fileId) => {
     setError(null);
     setProcessing(true);
+    setRetrievedRecord(null);
+    setReport(null);
     try {
-      const data = await retrieveAnalysis(fileId);
+      const record = await retrieveAnalysis(fileId);
       
-      setReport(data); // In our backend, record contains full report if not expired
-      setReportUrl(data.analysis_report_url);
-      setEdaUrl(data.eda_profile_url);
-      setRawEdaUrl(data.raw_eda_profile_url);
-      setAnalysisId(data.id);
+      // Store as a retrieved record (metadata only, not a full analysis report)
+      setRetrievedRecord(record);
+      setReportUrl(record.analysis_report_url);
+      setEdaUrl(record.eda_profile_url);
+      setRawEdaUrl(record.raw_eda_profile_url);
+      setAnalysisId(record.id);
       
-      return data;
+      return record;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -89,6 +94,7 @@ export function useDashboard() {
     setEdaUrl(null);
     setRawEdaUrl(null);
     setAnalysisId(null);
+    setRetrievedRecord(null);
     setError(null);
   }, []);
 
@@ -102,6 +108,7 @@ export function useDashboard() {
     edaUrl,
     rawEdaUrl,
     analysisId,
+    retrievedRecord,
     processing,
     error,
     executeAnalysis,
@@ -109,3 +116,4 @@ export function useDashboard() {
     loadRemoteAnalysis,
   };
 }
+
