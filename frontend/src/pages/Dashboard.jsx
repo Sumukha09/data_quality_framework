@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { downloadPropertiesPdf } from "../pdfExport";
-
+import { sendAnalysisIdEmail } from "../api";
 import { downloadCleanedDataXlsx } from "../lib/downloadCleanedDataXlsx";
 
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,10 @@ import {
   Search,
   Lock,
   Clock,
+  X,
+  Mail,
+  Check,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -130,6 +134,7 @@ export default function Dashboard() {
     executeAnalysis,
     resetDashboard,
     loadRemoteAnalysis,
+    retrievedRecord,
   } = useDashboard();
 
   const [sourceType, setSourceType] = useState("upload");
@@ -142,9 +147,15 @@ export default function Dashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
 
   const [searchId, setSearchId] = useState("");
+  const [edaViewerUrl, setEdaViewerUrl] = useState(null);
+  const [edaViewerTitle, setEdaViewerTitle] = useState("");
+  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [emailAddress, setEmailAddress] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [emailError, setEmailError] = useState("");
 
   const isUpload = sourceType === "upload";
-
 
   useEffect(() => {
     resetDashboard();
@@ -162,7 +173,23 @@ export default function Dashboard() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    // Simple alert-free feedback could be added if needed, but this is a start
+  };
+
+  const handleSendEmail = async (idToSend) => {
+    if (!emailAddress.trim()) return;
+    setEmailSending(true);
+    setEmailStatus(null);
+    setEmailError("");
+    try {
+      await sendAnalysisIdEmail(emailAddress.trim(), idToSend);
+      setEmailStatus("sent");
+      setTimeout(() => { setShowEmailInput(false); setEmailStatus(null); setEmailAddress(""); }, 3000);
+    } catch (err) {
+      setEmailStatus("error");
+      setEmailError(err.message || "Failed to send email");
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   const isFormValid = () => {
@@ -705,55 +732,87 @@ export default function Dashboard() {
                       </button>
                     </div>
 
-                    {reportUrl && (
-                      <div className="flex flex-col items-center gap-4 mt-10 mb-16">
-                        <button
-                          onClick={() => window.open(reportUrl, "_blank")}
-                          className="w-full max-w-xl px-8 py-6 text-2xl font-bold rounded-2xl bg-primary text-primary-foreground flex items-center justify-center gap-4 shadow-lg hover:opacity-90 transition-all border-2 border-primary uppercase tracking-widest"
-                        >
-                          <ExternalLink className="w-8 h-8 mr-2" />
-                          View Cloud Analysis Report (Supabase)
-                        </button>
-
+                    <div className="flex flex-col items-center gap-4 mt-10 mb-16">
                         <div className="flex gap-4 w-full max-w-xl">
                           {edaUrl && (
                             <button
-                              onClick={() => window.open(edaUrl, "_blank")}
-                              className="flex-1 px-4 py-4 text-lg font-bold rounded-xl bg-secondary text-secondary-foreground flex items-center justify-center gap-2 shadow-md hover:bg-secondary/80 transition-all border-2 border-secondary uppercase tracking-tight"
+                              onClick={() => { setEdaViewerUrl(edaUrl); setEdaViewerTitle("EDA Profile (Cleaned)"); }}
+                              className="flex-1 px-4 py-4 text-lg font-bold rounded-xl bg-secondary text-secondary-foreground flex items-center justify-center gap-2 shadow-md hover:bg-secondary/80 transition-all border-2 border-secondary uppercase tracking-tight cursor-pointer"
                             >
-                              <ExternalLink className="w-5 h-5" />
+                              <Activity className="w-5 h-5" />
                               Cleaned EDA
                             </button>
                           )}
                           {rawEdaUrl && (
                             <button
-                              onClick={() => window.open(rawEdaUrl, "_blank")}
-                              className="flex-1 px-4 py-4 text-lg font-bold rounded-xl bg-muted text-muted-foreground flex items-center justify-center gap-2 shadow-md hover:bg-muted/80 transition-all border-2 border-muted uppercase tracking-tight"
+                              onClick={() => { setEdaViewerUrl(rawEdaUrl); setEdaViewerTitle("EDA Profile (Raw)"); }}
+                              className="flex-1 px-4 py-4 text-lg font-bold rounded-xl bg-muted text-muted-foreground flex items-center justify-center gap-2 shadow-md hover:bg-muted/80 transition-all border-2 border-muted uppercase tracking-tight cursor-pointer"
                             >
-                              <ExternalLink className="w-5 h-5" />
+                              <Activity className="w-5 h-5" />
                               Raw EDA
                             </button>
                           )}
                         </div>
                         
                         {analysisId && (
-                            <div className="mt-8 p-4 bg-muted/30 rounded-xl border border-border flex items-center justify-between gap-4 w-full max-w-xl">
-                                <div className="overflow-hidden">
-                                    <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">Private Analysis ID (Keep this to retrieve later)</p>
-                                    <p className="text-xs font-mono font-bold truncate text-primary">{analysisId}</p>
+                            <div className="mt-8 p-6 bg-primary/5 rounded-3xl border-2 border-primary/20 flex flex-col items-center gap-4 w-full max-w-xl">
+                                <div className="text-center w-full">
+                                    <div className="flex items-center justify-center gap-2 mb-2">
+                                        <Lock className="w-4 h-4 text-primary" />
+                                        <p className="text-xs uppercase tracking-[0.2em] font-black text-primary">Private Analysis ID</p>
+                                    </div>
+                                    <p className="text-xl font-mono font-bold text-foreground break-all bg-background/50 p-4 rounded-xl border border-border/50 select-all">{analysisId}</p>
+                                    <p className="text-[10px] text-muted-foreground mt-3 uppercase tracking-widest font-bold">Copy or email this ID to retrieve your report later. Valid for 7 days.</p>
                                 </div>
                                 <Button 
                                     variant="outline" 
-                                    size="sm" 
                                     onClick={() => copyToClipboard(analysisId)}
-                                    className="flex items-center gap-2"
+                                    className="w-full h-12 rounded-xl flex items-center justify-center gap-3 hover:bg-primary hover:text-primary-foreground transition-all duration-300 group"
                                 >
-                                    <Copy className="w-3 h-3" /> Copy
+                                    <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" /> 
+                                    <span className="font-bold uppercase tracking-widest">Copy Analysis ID</span>
                                 </Button>
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => { setShowEmailInput(!showEmailInput); setEmailStatus(null); setEmailError(""); }}
+                                    className="w-full h-12 rounded-xl flex items-center justify-center gap-3 hover:bg-primary hover:text-primary-foreground transition-all duration-300 group"
+                                >
+                                    <Mail className="w-5 h-5 group-hover:scale-110 transition-transform" /> 
+                                    <span className="font-bold uppercase tracking-widest">Email Analysis ID</span>
+                                </Button>
+                                {showEmailInput && (
+                                    <div className="w-full mt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                                        <div className="flex gap-2">
+                                            <Input
+                                                type="email"
+                                                placeholder="Enter your email address"
+                                                value={emailAddress}
+                                                onChange={(e) => setEmailAddress(e.target.value)}
+                                                className="flex-1 h-12 rounded-xl"
+                                                disabled={emailSending}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleSendEmail(analysisId)}
+                                            />
+                                            <Button
+                                                onClick={() => handleSendEmail(analysisId)}
+                                                disabled={emailSending || !emailAddress.trim()}
+                                                className="h-12 rounded-xl px-6 font-bold uppercase tracking-widest"
+                                            >
+                                                {emailSending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                                            </Button>
+                                        </div>
+                                        {emailStatus === 'sent' && (
+                                            <p className="text-emerald-500 text-sm font-bold mt-2 flex items-center justify-center gap-2">
+                                                <Check className="w-4 h-4" /> Analysis ID sent to your email!
+                                            </p>
+                                        )}
+                                        {emailStatus === 'error' && (
+                                            <p className="text-destructive text-sm font-bold mt-2">⚠️ {emailError}</p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                       </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -769,6 +828,148 @@ export default function Dashboard() {
         />
       )}
 
+      {/* Retrieved Record Display */}
+      {retrievedRecord && (
+        <section className="border-t border-border mt-12 bg-secondary/10 animate-in fade-in slide-in-from-bottom-16 duration-1000">
+          <div className="container mx-auto px-6 py-24 md:py-32">
+            <div className="max-w-3xl mx-auto text-center">
+              <Badge
+                variant="outline"
+                className="mb-6 bg-emerald-600/20 text-emerald-400 px-4 py-1.5 text-xs tracking-widest uppercase rounded-full border-emerald-600/30"
+              >
+                Retrieved Successfully
+              </Badge>
+              <h2 className="text-4xl md:text-6xl font-serif italic tracking-tight mb-4 text-foreground">
+                {retrievedRecord.file_name}
+              </h2>
+              <p className="text-lg text-muted-foreground font-serif mb-8">
+                {(() => {
+                  const mime = retrievedRecord.file_type || "";
+                  const map = {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+                    "application/vnd.ms-excel": "XLS",
+                    "text/csv": "CSV",
+                    "application/json": "JSON",
+                    "application/pdf": "PDF",
+                    "text/plain": "TXT",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+                  };
+                  return map[mime.toLowerCase()] || mime.split("/").pop()?.toUpperCase() || retrievedRecord.file_name?.split(".").pop()?.toUpperCase() || "FILE";
+                })()} · {(() => {
+                  const src = retrievedRecord.source || "";
+                  const sourceMap = {
+                    "others_upload": "File Upload",
+                    "xlsx_upload": "XLSX Upload",
+                    "json_upload": "JSON Upload",
+                    "parquet_upload": "Parquet Upload",
+                    "api": "API Ingestion",
+                    "link": "URL Ingestion",
+                    "upload": "File Upload"
+                  };
+                  return sourceMap[src.toLowerCase()] || src.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                })()} · Uploaded {new Date(retrievedRecord.upload_date).toLocaleDateString()}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-12">
+                {reportUrl && (
+                  <a
+                    href={reportUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border/50 bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+                  >
+                    <FileText className="w-8 h-8 text-primary group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-bold uppercase tracking-widest">Quality Report PDF</span>
+                    <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                  </a>
+                )}
+                {edaUrl && (
+                  <button
+                    onClick={() => { setEdaViewerUrl(edaUrl); setEdaViewerTitle("EDA Profile (Cleaned)"); }}
+                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border/50 bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 cursor-pointer"
+                  >
+                    <Activity className="w-8 h-8 text-primary group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-bold uppercase tracking-widest">EDA Profile (Cleaned)</span>
+                    <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
+                {rawEdaUrl && (
+                  <button
+                    onClick={() => { setEdaViewerUrl(rawEdaUrl); setEdaViewerTitle("EDA Profile (Raw)"); }}
+                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border/50 bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 cursor-pointer"
+                  >
+                    <Activity className="w-8 h-8 text-amber-500 group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-bold uppercase tracking-widest">EDA Profile (Raw)</span>
+                    <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+
+              {analysisId && (
+                <div className="p-6 bg-primary/5 rounded-3xl border-2 border-primary/20 flex flex-col items-center gap-4 w-full max-w-xl mx-auto mt-12 animate-in fade-in zoom-in duration-500 shadow-xl">
+                  <div className="text-center w-full">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <Lock className="w-4 h-4 text-primary" />
+                      <p className="text-xs uppercase tracking-[0.2em] font-black text-primary">Analysis ID</p>
+                    </div>
+                    <p className="text-xl font-mono font-bold text-foreground break-all bg-background/50 p-4 rounded-xl border border-border/50 select-all">{analysisId}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => copyToClipboard(analysisId)}
+                    className="w-full h-12 rounded-xl flex items-center justify-center gap-3 hover:bg-primary hover:text-primary-foreground transition-all duration-300 group"
+                  >
+                    <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <span className="font-bold uppercase tracking-widest">Copy Analysis ID</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { setShowEmailInput(!showEmailInput); setEmailStatus(null); setEmailError(""); }}
+                    className="w-full h-12 rounded-xl flex items-center justify-center gap-3 hover:bg-primary hover:text-primary-foreground transition-all duration-300 group"
+                  >
+                    <Mail className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <span className="font-bold uppercase tracking-widest">Email Analysis ID</span>
+                  </Button>
+                  {showEmailInput && (
+                    <div className="w-full mt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <div className="flex gap-2">
+                        <Input
+                          type="email"
+                          placeholder="Enter your email address"
+                          value={emailAddress}
+                          onChange={(e) => setEmailAddress(e.target.value)}
+                          className="flex-1 h-12 rounded-xl"
+                          disabled={emailSending}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSendEmail(analysisId)}
+                        />
+                        <Button
+                          onClick={() => handleSendEmail(analysisId)}
+                          disabled={emailSending || !emailAddress.trim()}
+                          className="h-12 rounded-xl px-6 font-bold uppercase tracking-widest"
+                        >
+                          {emailSending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                        </Button>
+                      </div>
+                      {emailStatus === 'sent' && (
+                        <p className="text-emerald-500 text-sm font-bold mt-2 flex items-center justify-center gap-2">
+                          <Check className="w-4 h-4" /> Analysis ID sent to your email!
+                        </p>
+                      )}
+                      {emailStatus === 'error' && (
+                        <p className="text-destructive text-sm font-bold mt-2">⚠️ {emailError}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!reportUrl && !edaUrl && !rawEdaUrl && (
+                <p className="text-muted-foreground mt-8 text-lg">No cloud artifacts available for this analysis.</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Private Retrieval Section */}
       <section className="bg-muted/30 py-24 border-t border-border">
@@ -805,13 +1006,41 @@ export default function Dashboard() {
             </Button>
           </form>
           
-          {error && error.includes("expired") && (
+          {error && (
               <p className="mt-6 text-destructive font-bold text-sm bg-destructive/5 py-4 rounded-xl border border-destructive/10 inline-block px-8">
                   ⚠️ {error}
               </p>
           )}
         </div>
       </section>
+
+      {/* EDA Profile Iframe Viewer Modal */}
+      {edaViewerUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col animate-in fade-in duration-300">
+          <div className="flex items-center justify-between px-6 py-4 bg-background/95 border-b border-border shadow-lg">
+            <div className="flex items-center gap-3">
+              <Activity className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-bold uppercase tracking-widest">{edaViewerTitle}</h3>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => { setEdaViewerUrl(null); setEdaViewerTitle(""); }}
+              className="rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <iframe
+              src={`/api/eda-viewer?url=${encodeURIComponent(edaViewerUrl)}`}
+              title={edaViewerTitle}
+              className="w-full h-full border-0"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

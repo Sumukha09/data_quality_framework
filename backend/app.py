@@ -31,7 +31,7 @@ from supabase_client import upload_file
 import datetime
 import asyncio
 from src.reporting.pdf_generator import generate_pdf_report
-from db import insert_file_metadata, update_file_status_and_report, update_parquet_urls, update_eda_urls, get_record_by_id, ensure_schema
+from db import insert_file_metadata, update_file_status_and_report, update_parquet_urls, update_eda_urls, get_record_by_id, ensure_schema, close_pool
 from src.reporting.profiler import DataProfiler
 from paths import get_workspace_dir
 from cleanup_cloud import purge_expired_cloud_data
@@ -47,6 +47,9 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(purge_expired_cloud_data(threshold_days=7))
     print("[*] Startup: Cloud Cleanup Task scheduled.")
     yield
+    # Graceful shutdown: close DB pool connections
+    await close_pool()
+    print("[*] Shutdown: Database connection pool closed.")
 
 app = FastAPI(
     title="Gesix Data Quality API",
@@ -255,7 +258,7 @@ async def api_process(
         "source": source_type,
         "status": "processing",
         "size": 0,
-        "upload_date": datetime.datetime.utcnow(),
+        "upload_date": datetime.datetime.now(datetime.timezone.utc),
         "url": source_url,
         "analysis_report_url": None,
     }
@@ -420,7 +423,8 @@ async def api_process(
 
         response_data = {
             "success": is_success,
-            "id": metadata["id"],
+            "id": file_id,
+            "status": status,
             "report": report,
             "raw_report": both_reports.get("raw_report"),
             "cleaned_report": both_reports.get("cleaned_report"),
@@ -469,26 +473,134 @@ async def get_eda_profile_raw():
         detail="Local EDA profiles are deprecated. Please use the 'raw_eda_url' returned in the analysis response."
     )
 
+@app.get("/api/eda-viewer", summary="Proxy to render EDA Profile HTML")
+async def eda_viewer_proxy(url: str):
+    """Fetches an EDA HTML report from a Supabase signed URL and re-serves it
+    with the correct Content-Type: text/html header so browsers render it properly.
+    Supabase signed URLs often serve HTML files with Content-Disposition: attachment
+    or Content-Type: application/octet-stream which prevents rendering."""
+    import httpx
+    from fastapi.responses import HTMLResponse
+
+    # Security: only allow Supabase URLs
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    if not url.startswith(supabase_url) and "supabase" not in url:
+        return JSONResponse(status_code=403, content={"error": "Only Supabase URLs are allowed"})
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return JSONResponse(status_code=resp.status_code, content={"error": "Failed to fetch EDA profile"})
+            return HTMLResponse(content=resp.text, status_code=200)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Proxy error: {str(e)}"})
+
+from pydantic import BaseModel
+
+class EmailRequest(BaseModel):
+    email: str
+    analysis_id: str
+
+@app.post("/api/send-analysis-id", summary="Email the Analysis ID to the user")
+async def send_analysis_id(req: EmailRequest):
+    """Send the unique Analysis ID to the user's email address via SMTP."""
+    import re
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    # Validate email format
+    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    if not email_pattern.match(req.email):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid email address format."})
+
+    # Validate UUID format
+    uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+    if not uuid_pattern.match(req.analysis_id):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid Analysis ID format."})
+
+    smtp_email = os.getenv("SMTP_EMAIL")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+
+    if not smtp_email or not smtp_password:
+        return JSONResponse(status_code=500, content={"success": False, "error": "Email service is not configured. Contact the administrator."})
+
+    # Build styled HTML email
+    html_body = f"""
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #f8f9fa; border-radius: 16px; padding: 40px 32px; border: 1px solid #e9ecef;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <h2 style="color: #1a1a2e; font-size: 22px; margin: 0 0 4px 0;">Gesix Data Quality</h2>
+            <p style="color: #6c757d; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin: 0;">Analysis ID Receipt</p>
+        </div>
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 2px solid #dee2e6; text-align: center; margin-bottom: 20px;">
+            <p style="color: #6c757d; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 12px 0; font-weight: 700;">Your Unique Analysis ID</p>
+            <p style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #1a1a2e; background: #f1f3f5; padding: 14px 16px; border-radius: 8px; margin: 0; word-break: break-all; border: 1px solid #dee2e6;">{req.analysis_id}</p>
+        </div>
+        <div style="background: #fff3cd; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; border: 1px solid #ffc107;">
+            <p style="color: #664d03; font-size: 13px; margin: 0;"><strong>⏳ Valid for 7 days.</strong> Use this ID on the Gesix Dashboard to retrieve your report.</p>
+        </div>
+        <p style="color: #adb5bd; font-size: 11px; text-align: center; margin: 0;">This is an automated message from Gesix Data Quality Platform.</p>
+    </div>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Your Gesix Analysis ID"
+    msg["From"] = smtp_email
+    msg["To"] = req.email
+    msg.attach(MIMEText(f"Your Gesix Analysis ID: {req.analysis_id}\n\nUse this ID on the dashboard to retrieve your report. Valid for 7 days.", "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, req.email, msg.as_string())
+        print(f"[*] Analysis ID emailed to {req.email}")
+        return {"success": True, "message": "Analysis ID sent to your email."}
+    except smtplib.SMTPAuthenticationError:
+        return JSONResponse(status_code=500, content={"success": False, "error": "Email authentication failed. Check SMTP credentials."})
+    except Exception as e:
+        print(f"[!] Email send error: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Failed to send email: {str(e)}"})
+
 @app.get("/api/retrieve/{file_id}", summary="Retrieve a private analysis record")
 async def retrieve_analysis(file_id: str):
+    import re
     try:
+        # Validate UUID format before querying the database
+        uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+        if not uuid_pattern.match(file_id):
+            return JSONResponse(
+                status_code=400, 
+                content={"success": False, "error": "Invalid Analysis ID format. Please check and try again."}
+            )
+
         record = await get_record_by_id(file_id)
         if not record:
-            raise HTTPException(status_code=404, detail="Analysis record not found.")
+            return JSONResponse(
+                status_code=404, 
+                content={"success": False, "error": "Analysis record not found. Please check your ID and try again."}
+            )
         
         if record.get('expired'):
-            return {
-                "success": False, 
-                "error": "This analysis has expired. Reports are only available for 7 days.",
-                "expired": True,
-                "file_name": record['file_name']
-            }
+            return JSONResponse(
+                status_code=410,
+                content={
+                    "success": False, 
+                    "error": "This analysis has expired. Reports are only available for 7 days.",
+                    "expired": True,
+                    "file_name": record['file_name']
+                }
+            )
             
         return {"success": True, "record": record}
     except HTTPException:
         raise
     except Exception as e:
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+        import traceback
+        print(f"[!] Retrieval Error: {e}\n{traceback.format_exc()}")
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Server error during retrieval: {str(e)}"})
 
 # History endpoint removed for privacy as per Phase 5
 @app.get("/api/history", summary="Get analysis history")

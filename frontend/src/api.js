@@ -33,6 +33,7 @@ export async function processData(options) {
     throw new Error(data.error || "Process failed");
   }
   return {
+    id: data.id,
     report: data.report,
     raw_report: data.raw_report,
     cleaned_report: data.cleaned_report,
@@ -46,12 +47,31 @@ export async function processData(options) {
 
 export async function retrieveAnalysis(fileId) {
   const res = await fetch(`${API_BASE}/retrieve/${fileId}`);
+  const data = await res.json().catch(() => ({ error: "Retrieval failed" }));
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Retrieval failed" }));
-    throw new Error(err.error || "Retrieval failed");
+    throw new Error(data.error || data.detail || "Retrieval failed");
   }
-  const data = await res.json();
+
+  // Backend returns { success: false, error: "...", expired: true } for expired records
+  if (!data.success) {
+    throw new Error(data.error || "Retrieval failed");
+  }
+
   return data.record;
+}
+
+export async function sendAnalysisIdEmail(email, analysisId) {
+  const res = await fetch(`${API_BASE}/send-analysis-id`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, analysis_id: analysisId }),
+  });
+  const data = await res.json().catch(() => ({ error: "Request failed" }));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || "Failed to send email");
+  }
+  return data;
 }
 
 export async function getRawData() {
