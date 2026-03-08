@@ -1,11 +1,13 @@
 import os
+from paths import get_workspace_dir
 
 class ReportGenerator:
     """
     Enhanced Reporting Layer: Generates deep-dive dashboard for the 7 quality dimensions.
     """
     def __init__(self):
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        workspace = get_workspace_dir()
+        self.output_dir = workspace["processed"]
 
     def generate_summary(self, report):
         if not report:
@@ -34,7 +36,7 @@ class ReportGenerator:
     def save_report(self, report, filename="final_quality_report.txt"):
         if not report:
             return None
-        report_path = os.path.join(self.base_dir, "data", "processed", filename)
+        report_path = os.path.join(self.output_dir, filename)
         
         explanation = (
             "This report provides a comprehensive analysis of the dataset using the "
@@ -88,7 +90,7 @@ class ReportGenerator:
         """
         if not report:
             return None
-        report_path = os.path.join(self.base_dir, "data", "processed", filename)
+        report_path = os.path.join(self.output_dir, filename)
         
         # HTML Template with minimal styling (for developer context)
         html_content = f"""<!DOCTYPE html>

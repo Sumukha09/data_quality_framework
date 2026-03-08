@@ -1,6 +1,7 @@
 import requests
 import os
 import shutil
+from paths import get_workspace_dir
 import pandas as pd
 import json
 import logging
@@ -24,8 +25,10 @@ class UniversalIngestor:
     including Live APIs, Web Scraping, and File Uploads.
     """
     def __init__(self):
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.raw_dir = os.path.join(base_dir, "data", "raw")
+        # Discover base directory and set up dynamic workspace
+        workspace = get_workspace_dir()
+        self.raw_dir = workspace["raw"]
+        self.output_dir = workspace["processed"]
         
         if not os.path.exists(self.raw_dir):
             os.makedirs(self.raw_dir)

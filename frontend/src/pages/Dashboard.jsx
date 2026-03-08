@@ -31,6 +31,10 @@ import {
   ExternalLink,
   Calendar as CalendarIcon,
   FileText,
+  Copy,
+  Search,
+  Lock,
+  Clock,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -117,10 +121,15 @@ export default function Dashboard() {
     cleanedReport,
     rawData,
     cleanedData,
+    reportUrl,
+    edaUrl,
+    rawEdaUrl,
+    analysisId,
     processing,
     error,
     executeAnalysis,
     resetDashboard,
+    loadRemoteAnalysis,
   } = useDashboard();
 
   const [sourceType, setSourceType] = useState("upload");
@@ -132,10 +141,29 @@ export default function Dashboard() {
   const [apiKey, setApiKey] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
 
+  const [searchId, setSearchId] = useState("");
+
   const isUpload = sourceType === "upload";
+
+
   useEffect(() => {
     resetDashboard();
   }, [resetDashboard]);
+
+  const handleRetrieve = async (e) => {
+    if (e) e.preventDefault();
+    if (!searchId.trim()) return;
+    try {
+      await loadRemoteAnalysis(searchId);
+    } catch (err) {
+      // Error handled by hook
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    // Simple alert-free feedback could be added if needed, but this is a start
+  };
 
   const isFormValid = () => {
     if (isUpload) return !!selectedFile;
@@ -676,6 +704,56 @@ export default function Dashboard() {
                         Download Quality Check Report
                       </button>
                     </div>
+
+                    {reportUrl && (
+                      <div className="flex flex-col items-center gap-4 mt-10 mb-16">
+                        <button
+                          onClick={() => window.open(reportUrl, "_blank")}
+                          className="w-full max-w-xl px-8 py-6 text-2xl font-bold rounded-2xl bg-primary text-primary-foreground flex items-center justify-center gap-4 shadow-lg hover:opacity-90 transition-all border-2 border-primary uppercase tracking-widest"
+                        >
+                          <ExternalLink className="w-8 h-8 mr-2" />
+                          View Cloud Analysis Report (Supabase)
+                        </button>
+
+                        <div className="flex gap-4 w-full max-w-xl">
+                          {edaUrl && (
+                            <button
+                              onClick={() => window.open(edaUrl, "_blank")}
+                              className="flex-1 px-4 py-4 text-lg font-bold rounded-xl bg-secondary text-secondary-foreground flex items-center justify-center gap-2 shadow-md hover:bg-secondary/80 transition-all border-2 border-secondary uppercase tracking-tight"
+                            >
+                              <ExternalLink className="w-5 h-5" />
+                              Cleaned EDA
+                            </button>
+                          )}
+                          {rawEdaUrl && (
+                            <button
+                              onClick={() => window.open(rawEdaUrl, "_blank")}
+                              className="flex-1 px-4 py-4 text-lg font-bold rounded-xl bg-muted text-muted-foreground flex items-center justify-center gap-2 shadow-md hover:bg-muted/80 transition-all border-2 border-muted uppercase tracking-tight"
+                            >
+                              <ExternalLink className="w-5 h-5" />
+                              Raw EDA
+                            </button>
+                          )}
+                        </div>
+                        
+                        {analysisId && (
+                            <div className="mt-8 p-4 bg-muted/30 rounded-xl border border-border flex items-center justify-between gap-4 w-full max-w-xl">
+                                <div className="overflow-hidden">
+                                    <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">Private Analysis ID (Keep this to retrieve later)</p>
+                                    <p className="text-xs font-mono font-bold truncate text-primary">{analysisId}</p>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => copyToClipboard(analysisId)}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Copy className="w-3 h-3" /> Copy
+                                </Button>
+                            </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -691,16 +769,49 @@ export default function Dashboard() {
         />
       )}
 
-      {report?.error && !error && (
-        <div className="container mx-auto px-6 py-24 text-center">
-          <h2 className="text-6xl font-serif text-destructive mb-6">
-            Pipeline Failure
-          </h2>
-          <p className="text-xl text-muted-foreground bg-destructive/5 border border-destructive/20 p-8 rounded-2xl max-w-2xl mx-auto font-mono text-sm inline-block">
-            {report.error}
-          </p>
+
+      {/* Private Retrieval Section */}
+      <section className="bg-muted/30 py-24 border-t border-border">
+        <div className="container mx-auto px-6 max-w-4xl text-center">
+          <div className="mb-12">
+            <h2 className="text-4xl font-serif mb-4 flex items-center justify-center gap-3">
+                <Lock className="w-8 h-8 text-primary" />
+                Private Report Retrieval
+            </h2>
+            <p className="text-muted-foreground max-w-lg mx-auto">
+              Enter your unique Analysis ID to retrieve your persistent cloud reports. 
+              <span className="block mt-2 font-bold text-primary flex items-center justify-center gap-1">
+                <Clock className="w-4 h-4" /> Reports are automatically purged after 7 days for your privacy.
+              </span>
+            </p>
+          </div>
+
+          <form onSubmit={handleRetrieve} className="flex gap-4 max-w-2xl mx-auto bg-background p-2 rounded-2xl border border-border shadow-sm">
+            <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Paste your Analysis ID here..." 
+                    value={searchId}
+                    onChange={(e) => setSearchId(e.target.value)}
+                    className="border-none bg-transparent pl-11 h-12 focus-visible:ring-0 text-primary font-mono text-sm"
+                />
+            </div>
+            <Button 
+                type="submit" 
+                disabled={processing || !searchId.trim()}
+                className="rounded-xl h-12 px-8 font-bold uppercase tracking-widest"
+            >
+                {processing ? "Retrieving..." : "Retrieve"}
+            </Button>
+          </form>
+          
+          {error && error.includes("expired") && (
+              <p className="mt-6 text-destructive font-bold text-sm bg-destructive/5 py-4 rounded-xl border border-destructive/10 inline-block px-8">
+                  ⚠️ {error}
+              </p>
+          )}
         </div>
-      )}
+      </section>
     </div>
   );
 }

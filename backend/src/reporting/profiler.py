@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import logging
+from paths import get_workspace_dir
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -13,12 +14,10 @@ if not logger.handlers:
 
 class DataProfiler:
     def __init__(self):
-        self.base_dir = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        self.output_dir = os.path.join(self.base_dir, "data", "processed")
+        workspace = get_workspace_dir()
+        self.output_dir = workspace["processed"]
 
-    def generate(self, df: pd.DataFrame, title: str = "Gesix EDA Profile") -> str | None:
+    def generate(self, df: pd.DataFrame, title: str = "Gesix EDA Profile", output_filename: str = "eda_profile.html") -> str | None:
         try:
             from ydata_profiling import ProfileReport
         except ImportError:
@@ -42,7 +41,7 @@ class DataProfiler:
                 samples=None,          
             )
 
-            output_path = os.path.join(self.output_dir, "eda_profile.html")
+            output_path = os.path.join(self.output_dir, output_filename)
             profile.to_file(output_path)
             logger.info(f"DataProfiler: EDA report saved → {output_path}")
             return output_path

@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import logging
 from functools import wraps
+from paths import get_workspace_dir
 
 # Set up logging for conversion
 logger = logging.getLogger(__name__)
@@ -21,13 +22,10 @@ class DataConverter:
     Unifies disparate raw formats (JSON, HTML, etc) into a single Structured CSV and Parquet Hub.
     """
     def __init__(self):
-        # Discover base directory
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.raw_dir = os.path.join(self.base_dir, "data", "raw")
-        self.output_dir = os.path.join(self.base_dir, "data", "processed")
-        
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
+        # Use dynamic system temp directory for workspace
+        workspace = get_workspace_dir()
+        self.raw_dir = workspace["raw"]
+        self.output_dir = workspace["processed"]
 
     def _get_latest_file(self, prefix, extension):
         """Finds the most recent file for a given source using modification time."""

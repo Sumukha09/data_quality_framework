@@ -1,6 +1,8 @@
 import sys
 import os
-from typing import Any, Optional, Dict, TYPE_CHECKING
+from datetime import datetime
+from typing import Optional, Dict, Any, TYPE_CHECKING
+from paths import get_workspace_dir
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,17 +35,42 @@ else:
 
 
 def purge_old_results() -> None:
-    """DISABLED: Data preservation enabled - raw and processed files are now kept with timestamps."""
-    # Data preservation mode: Don't delete files anymore
-    # Raw files: data/raw/ - kept with timestamps
-    # Processed files: data/processed/ - kept with timestamps (raw_structured_*.parquet, cleaned_data_*.parquet)
-    pass  # No-op for data preservation
+    """Purge previous analysis results to save disk space."""
+    import os
+    import shutil
+    workspace = get_workspace_dir()
+    processed_dir = workspace["processed"]
+    if os.path.exists(processed_dir):
+        for filename in os.listdir(processed_dir):
+            file_path = os.path.join(processed_dir, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f'Failed to delete {file_path}. Reason: {e}')
+    print("[*] Secure Purge: Stale Analysis Results permanently erased.")
 
 
 def purge_raw_files() -> None:
-    """DISABLED: Data preservation enabled - raw files are now kept for history."""
-    # Raw files are now preserved with timestamps
-    pass  # No-op for data preservation
+    """Purge temporary raw files to save disk space."""
+    import os
+    workspace = get_workspace_dir()
+    raw_dir = workspace["raw"]
+    temp_dir = workspace["temp"]
+    
+    for directory in [raw_dir, temp_dir]:
+        if os.path.exists(directory):
+            for filename in os.listdir(directory):
+                if filename == ".gitkeep":
+                    continue
+                file_path = os.path.join(directory, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                except Exception as e:
+                    print(f'Failed to delete {file_path}. Reason: {e}')
     print("[*] Secure Purge: Temporary Raw Data permanently erased.")
 
 
@@ -144,14 +171,18 @@ def run_pipeline(start_date: Optional[str] = None,
 
         print("\n" + "=" * 50)
         print("[OK] PIPELINE EXECUTION FINISHED!")
-        print(f"Unified Hub: data/processed/raw_structured.parquet")
-        print(f"Cleaned Hub: data/processed/cleaned_data.parquet")
+        print(f"Unified Hub: {hub_path}")
+        print(f"Cleaned Hub: {cleaned_file}")
         print("=" * 50 + "\n")
 
-        # Security: Immediately wipe raw uploaded/API data so it doesn't stay on disk while idle
-        purge_raw_files()
-
-        return quality_report
+        # Return a rich payload including artifact paths for the caller to upload
+        result_payload = quality_report.copy()
+        result_payload.update({
+            "hub_path": hub_path,
+            "cleaned_path": cleaned_file,
+            "status": "completed"
+        })
+        return result_payload
 
     except Exception as e:
         import traceback

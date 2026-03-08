@@ -4,6 +4,7 @@ import logging
 import numpy as np
 from scipy import stats
 import re
+from paths import get_workspace_dir
 
 # Set up logging for remediation
 logger = logging.getLogger(__name__)
@@ -52,10 +53,10 @@ class DataCleaner:
     """
     
     def __init__(self):
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.input_file = os.path.join(self.base_dir, "data", "processed", "raw_structured.parquet")
-        self.output_file = os.path.join(self.base_dir, "data", "processed", "cleaned_data.parquet")
-        self.output_dir = os.path.join(self.base_dir, "data", "processed")
+        workspace = get_workspace_dir()
+        self.output_dir = workspace["processed"]
+        self.input_file = os.path.join(self.output_dir, "raw_structured.parquet")
+        self.output_file = os.path.join(self.output_dir, "cleaned_data.parquet")
         self.imputation_stats = {}  # Track what was imputed for transparency
 
     def load_data(self):

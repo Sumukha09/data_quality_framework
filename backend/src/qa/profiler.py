@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import logging
+from paths import get_workspace_dir
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -21,10 +22,8 @@ class DataProfiler:
     """
 
     def __init__(self):
-        self.base_dir = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        self.output_dir = os.path.join(self.base_dir, "data", "processed")
+        workspace = get_workspace_dir()
+        self.output_dir = workspace["processed"]
 
     def generate(self, df: pd.DataFrame, title: str = "Gesix EDA Profile") -> str | None:
         """

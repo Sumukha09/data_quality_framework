@@ -38,7 +38,20 @@ export async function processData(options) {
     cleaned_report: data.cleaned_report,
     raw_data: data.raw_data,
     cleaned_data: data.cleaned_data,
+    report_url: data.report_url,
+    eda_url: data.eda_url,
+    raw_eda_url: data.raw_eda_url,
   };
+}
+
+export async function retrieveAnalysis(fileId) {
+  const res = await fetch(`${API_BASE}/retrieve/${fileId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Retrieval failed" }));
+    throw new Error(err.error || "Retrieval failed");
+  }
+  const data = await res.json();
+  return data.record;
 }
 
 export async function getRawData() {
