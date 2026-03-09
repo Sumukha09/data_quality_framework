@@ -39,6 +39,10 @@ import {
   Mail,
   Check,
   Loader2,
+  Send,
+  AlertCircle,
+  Database,
+  ShieldCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -192,12 +196,23 @@ export default function Dashboard() {
     }
   };
 
+  const isValidUrl = (urlStr) => {
+    try {
+      const parsed = new URL(urlStr);
+      // Strictly enforce HTTPS as per security requirements
+      if (parsed.protocol !== "https:") return false;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const isFormValid = () => {
     if (isUpload) return !!selectedFile;
-    const hasUrl = sourceUrl.trim().length > 0;
+    const hasUrl = sourceUrl.trim().length > 0 && isValidUrl(sourceUrl.trim());
     const hasKey =
       sourceType === "api" && apiInputMode === "key"
-        ? apiKey.trim().length > 0
+        ? apiKey.trim().length >= 8
         : true;
     return useDateRange
       ? hasUrl && hasKey && startDate && endDate
@@ -312,38 +327,100 @@ export default function Dashboard() {
               <h3 className="text-2xl font-serif">02. Configure Source</h3>
 
               {isUpload ? (
-                <div className="relative group rounded-2xl border-2 border-dashed border-border/60 hover:border-gold/60 bg-secondary/10 hover:bg-secondary/20 transition-all duration-300 w-full max-w-lg overflow-hidden">
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-6 text-center">
-                    <div
-                      className={`h-12 w-12 rounded-full ${selectedFile ? "bg-gold/20" : "bg-primary/10"} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500`}
-                    >
-                      {selectedFile ? (
-                        <FileText className="h-6 w-6 text-gold" />
-                      ) : (
-                        <FileUp className="h-6 w-6 text-primary" />
-                      )}
-                    </div>
-                    <p className="text-sm font-medium text-foreground mb-1">
-                      {selectedFile
-                        ? selectedFile.name
-                        : "Click to upload dataset"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedFile
-                        ? "Ready for processing"
-                        : "CSV, JSON, PDF files supported"}
-                    </p>
+                <div className="space-y-6">
+                  {/* Upload Best Practices Info Box */}
+                  <div className="bg-primary/5 hover:bg-primary/10 border-2 border-primary/20 rounded-2xl p-6 transition-colors duration-300">
+                    <h4 className="flex items-center gap-2 text-primary font-bold tracking-wide uppercase text-sm mb-4">
+                      <Activity className="w-4 h-4" />
+                      Upload Best Practices
+                    </h4>
+                    <ul className="space-y-3 text-sm text-muted-foreground">
+                      <li className="flex gap-3">
+                        <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <span><strong>Data Formatting:</strong> Ensure your file has only column headers in the first row. Remove any overarching sheet labels or blank rows before the data.</span>
+                      </li>
+                      <li className="flex gap-3">
+                        <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <span><strong>File Size Limit:</strong> The maximum allowed file size is <strong>50MB</strong>.</span>
+                      </li>
+                      <li className="flex gap-3">
+                        <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <span><strong>Accepted Formats:</strong> .csv, .json, .xlsx, .xls, .xml, .txt, .pdf. <em>Executable files or scripts are strictly prohibited.</em></span>
+                      </li>
+                    </ul>
                   </div>
-                  <Input
-                    type="file"
-                    accept=".csv,.json,.xml,.pdf,.xlsx,.xls,.txt"
-                    onChange={(e) => setSelectedFile(e.target.files[0])}
-                    disabled={processing}
-                    className="opacity-0 w-full h-40 cursor-pointer"
-                  />
+
+                  {/* Dropzone */}
+                  <div className="relative group rounded-2xl border-2 border-dashed border-border/60 hover:border-gold/60 bg-secondary/10 hover:bg-secondary/20 transition-all duration-300 w-full max-w-lg overflow-hidden flex-col items-center justify-center min-h-[200px] flex">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none p-6 text-center">
+                      <div
+                        className={`h-16 w-16 rounded-full ${selectedFile ? "bg-gold/20" : "bg-primary/10"} flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-500`}
+                      >
+                        {selectedFile ? (
+                          <FileText className="h-8 w-8 text-gold" />
+                        ) : (
+                          <FileUp className="h-8 w-8 text-primary group-hover:animate-bounce" />
+                        )}
+                      </div>
+                      <p className="text-base font-semibold text-foreground mb-2">
+                        {selectedFile
+                          ? selectedFile.name
+                          : "Drag & drop or click to upload"}
+                      </p>
+                      <p className="text-sm font-medium text-muted-foreground/80">
+                        {selectedFile
+                          ? "Ready for processing"
+                          : "Must follow best practices above"}
+                      </p>
+                    </div>
+                    <Input
+                      type="file"
+                      accept=".csv,.json,.xml,.pdf,.xlsx,.xls,.txt"
+                      onChange={(e) => setSelectedFile(e.target.files[0])}
+                      disabled={processing}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-[0]"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-12">
+                  {/* API / Web Scraping Best Practices Info Box */}
+                  <div className="bg-primary/5 hover:bg-primary/10 border-2 border-primary/20 rounded-2xl p-6 transition-colors duration-300">
+                    <h4 className="flex items-center gap-2 text-primary font-bold tracking-wide uppercase text-sm mb-4">
+                      <Activity className="w-4 h-4" />
+                      {sourceType === "api" ? "API Ingestion Best Practices" : "Web Scraping Best Practices"}
+                    </h4>
+                    <ul className="space-y-3 text-sm text-muted-foreground">
+                      <li className="flex gap-3">
+                        <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <span><strong>Secure Connections Only:</strong> All target URLs must use the highly secure <strong>HTTPS</strong> protocol. HTTP connections will not be executed.</span>
+                      </li>
+                      {sourceType === "api" ? (
+                        <>
+                          <li className="flex gap-3">
+                            <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                            <span><strong>Authentication:</strong> Ensure your API Key or Bearer Token is valid for the target endpoint. Keys must be at least 8 characters long if provided.</span>
+                          </li>
+                          <li className="flex gap-3">
+                            <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                            <span><strong>Payload Formatting:</strong> The API should return structured JSON or XML arrays.</span>
+                          </li>
+                        </>
+                      ) : (
+                        <>
+                          <li className="flex gap-3">
+                            <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                            <span><strong>Data Extraction:</strong> Ensure the target webpage contains structured tabular data (e.g., HTML tables or list structures) for accurate scraping.</span>
+                          </li>
+                          <li className="flex gap-3">
+                            <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                            <span><strong>Compliance:</strong> Verify that scraping the target website complies with their Terms of Service.</span>
+                          </li>
+                        </>
+                      )}
+                    </ul>
+                  </div>
+
                   <div>
                     <Label className="form-label">Target URL</Label>
                     <Input
@@ -356,8 +433,14 @@ export default function Dashboard() {
                       value={sourceUrl}
                       onChange={(e) => setSourceUrl(e.target.value)}
                       disabled={processing}
-                      className="input-field max-w-lg"
+                      className={`input-field max-w-lg ${sourceUrl.trim().length > 0 && !isValidUrl(sourceUrl.trim()) ? "border-destructive focus-visible:ring-destructive/20" : ""}`}
                     />
+                    {sourceUrl.trim().length > 0 && !isValidUrl(sourceUrl.trim()) && (
+                       <p className="text-xs text-destructive mt-2 font-medium flex items-center gap-1.5">
+                         <AlertCircle className="w-3.5 h-3.5" /> 
+                         Security Policy: Only secure HTTPS connections are permitted. HTTP is blocked.
+                       </p>
+                    )}
                   </div>
 
                   {sourceType === "api" && (
@@ -399,8 +482,14 @@ export default function Dashboard() {
 
                       {apiInputMode === "key" && (
                         <div className="mt-6 space-y-2 animate-in fade-in zoom-in-95">
-                          <Label className="text-sm font-medium text-muted-foreground">
+                          <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                             API Key / Bearer Token
+                            {apiKey.trim().length > 0 && apiKey.trim().length < 8 && (
+                                <span className="text-[10px] text-destructive uppercase tracking-widest font-black ml-auto">Invalid</span>
+                            )}
+                            {apiKey.trim().length >= 8 && (
+                                <span className="text-[10px] text-emerald-500 uppercase tracking-widest font-black ml-auto">Valid Format</span>
+                            )}
                           </Label>
                           <Input
                             type="password"
@@ -408,11 +497,13 @@ export default function Dashboard() {
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             disabled={processing}
-                            className="input-field font-mono max-w-lg"
+                            className={`input-field font-mono max-w-lg ${apiKey.trim().length > 0 && apiKey.trim().length < 8 ? "border-destructive focus-visible:ring-destructive/20" : ""}`}
                           />
-                          <p className="text-xs text-muted-foreground">
-                            Key will be sent as Authorization header and
-                            x-api-key
+                          <p className="text-xs text-muted-foreground flex justify-between">
+                            <span>Key will be sent as Authorization header and x-api-key</span>
+                            {apiKey.trim().length > 0 && apiKey.trim().length < 8 && (
+                                <span className="text-destructive font-bold">Minimum 8 characters required</span>
+                            )}
                           </p>
                         </div>
                       )}
@@ -473,34 +564,33 @@ export default function Dashboard() {
 
       {/* ── Results ── */}
       {showResults && (
-        <section className="border-t border-border mt-12 bg-secondary/10 animate-in fade-in slide-in-from-bottom-16 duration-1000">
+        <section className="border-t border-border mt-12 bg-secondary/5 animate-in fade-in slide-in-from-bottom-16 duration-1000 relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/80 pointer-events-none -z-10" />
           <div className="container mx-auto px-6 py-24 md:py-32">
             {/* Quality Scores - Side by Side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-24">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mb-24">
               {/* Raw Data Quality Score */}
               {rawReport && (
-                <div className="p-8 rounded-3xl border border-border/50 bg-background/50">
+                <div className="surface-glass p-8 md:p-10 rounded-3xl border border-border/50 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-[80px] -z-10 group-hover:bg-amber-500/20 transition-colors duration-500" />
                   <Badge
                     variant="outline"
-                    className="mb-6 bg-amber-600/20 text-amber-400 px-4 py-1.5 text-xs tracking-widest uppercase rounded-full border-amber-600/30"
+                    className="mb-8 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-5 py-2 text-xs tracking-[0.2em] font-bold uppercase rounded-full border-amber-500/20 shadow-sm"
                   >
                     Raw Data Quality
                   </Badge>
-                  <h2 className="text-4xl md:text-6xl font-serif italic tracking-tight mb-4 text-foreground">
-                    Score: {Math.round(rawReport.overall_trustability)}
+                  <h2 className="text-5xl md:text-7xl font-serif font-black tracking-tight mb-4 text-foreground drop-shadow-sm">
+                    {Math.round(rawReport.overall_trustability)}<span className="text-3xl md:text-5xl text-muted-foreground/50 font-medium">/100</span>
                   </h2>
-                  <p className="text-lg text-muted-foreground font-serif mb-2">
-                    Out of 100 possible points.
-                  </p>
-                  <p className="text-2xl font-serif text-foreground">
+                  <p className="text-xl font-medium text-foreground mb-10 flex items-center gap-3">
                     {rawReport.total_records}{" "}
-                    <span className="text-sm text-muted-foreground uppercase tracking-wider">
-                      Records
+                    <span className="text-sm text-muted-foreground uppercase tracking-widest font-bold bg-secondary/30 px-3 py-1 rounded-md">
+                      Records Analyzed
                     </span>
                   </p>
 
                   {/* Raw Dimensions */}
-                  <div className="grid grid-cols-2 gap-3 mt-8">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-8">
                     {rawReport.dimensions &&
                       Object.entries(rawReport.dimensions).map(
                         ([name, data]) => {
@@ -510,13 +600,13 @@ export default function Dashboard() {
                           return (
                             <div
                               key={name}
-                              className={`p-3 rounded-xl ${isFail ? "bg-destructive/10 border border-destructive/30" : "bg-secondary/30"}`}
+                              className={`p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${isFail ? "bg-destructive/5 border-destructive/20" : "bg-card border-border/50 shadow-sm"}`}
                             >
-                              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+                              <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground mb-2 truncate">
                                 {name}
                               </p>
                               <p
-                                className={`text-xl font-bold ${isFail ? "text-destructive" : "text-foreground"}`}
+                                className={`text-2xl md:text-3xl font-black ${isFail ? "text-destructive" : "text-foreground"}`}
                               >
                                 {Math.round(score)}%
                               </p>
@@ -530,28 +620,26 @@ export default function Dashboard() {
 
               {/* Cleaned Data Quality Score */}
               {cleanedReport && (
-                <div className="p-8 rounded-3xl border border-border/50 bg-background/50">
+                <div className="surface-glass p-8 md:p-10 rounded-3xl border border-border/50 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] -z-10 group-hover:bg-emerald-500/20 transition-colors duration-500" />
                   <Badge
                     variant="outline"
-                    className="mb-6 bg-emerald-600/20 text-emerald-400 px-4 py-1.5 text-xs tracking-widest uppercase rounded-full border-emerald-600/30"
+                    className="mb-8 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-5 py-2 text-xs tracking-[0.2em] font-bold uppercase rounded-full border-emerald-500/20 shadow-sm"
                   >
                     Cleaned Data Quality
                   </Badge>
-                  <h2 className="text-4xl md:text-6xl font-serif italic tracking-tight mb-4 text-foreground">
-                    Score: {Math.round(cleanedReport.overall_trustability)}
+                  <h2 className="text-5xl md:text-7xl font-serif font-black tracking-tight mb-4 text-foreground drop-shadow-sm">
+                    {Math.round(cleanedReport.overall_trustability)}<span className="text-3xl md:text-5xl text-muted-foreground/50 font-medium">/100</span>
                   </h2>
-                  <p className="text-lg text-muted-foreground font-serif mb-2">
-                    Out of 100 possible points.
-                  </p>
-                  <p className="text-2xl font-serif text-foreground">
+                  <p className="text-xl font-medium text-foreground mb-10 flex items-center gap-3">
                     {cleanedReport.total_records}{" "}
-                    <span className="text-sm text-muted-foreground uppercase tracking-wider">
-                      Records
+                    <span className="text-sm text-muted-foreground uppercase tracking-widest font-bold bg-secondary/30 px-3 py-1 rounded-md">
+                      Records Preserved
                     </span>
                   </p>
 
                   {/* Cleaned Dimensions */}
-                  <div className="grid grid-cols-2 gap-3 mt-8">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-8">
                     {cleanedReport.dimensions &&
                       Object.entries(cleanedReport.dimensions).map(
                         ([name, data]) => {
@@ -561,13 +649,13 @@ export default function Dashboard() {
                           return (
                             <div
                               key={name}
-                              className={`p-3 rounded-xl ${isFail ? "bg-destructive/10 border border-destructive/30" : "bg-secondary/30"}`}
+                              className={`p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${isFail ? "bg-destructive/5 border-destructive/20" : "bg-card border-border/50 shadow-sm"}`}
                             >
-                              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+                              <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground mb-2 truncate">
                                 {name}
                               </p>
                               <p
-                                className={`text-xl font-bold ${isFail ? "text-destructive" : "text-foreground"}`}
+                                className={`text-2xl md:text-3xl font-black ${isFail ? "text-destructive" : "text-foreground"}`}
                               >
                                 {Math.round(score)}%
                               </p>
@@ -582,41 +670,31 @@ export default function Dashboard() {
 
             {/* Data Tables - Full Width */}
             {(rawTableKeys.length > 0 || cleanedTableKeys.length > 0) && (
-              <div className="mt-32 space-y-16">
+              <div className="mt-32 space-y-24">
                 {/* Raw data table */}
                 {rawTableKeys.length > 0 && (
                   <div className="w-full">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                       <div>
-                        <h3 className="text-3xl md:text-4xl font-serif tracking-tight mb-3">
+                        <h3 className="text-3xl md:text-4xl font-serif font-bold tracking-tight mb-3 flex items-center gap-3">
+                          <Database className="w-8 h-8 text-primary" />
                           Raw Data
                         </h3>
-                        <p className="text-lg text-muted-foreground">
+                        <p className="text-lg text-muted-foreground font-medium">
                           Original ingested data before cleaning and
                           remediation.
                         </p>
                       </div>
-                      <div className="flex gap-4">
-                        <button
-                          onClick={() =>
-                            window.open("/api/eda-profile-raw", "_blank")
-                          }
-                          className="flex items-center gap-2 text-sm font-semibold tracking-wide uppercase hover:text-primary transition-colors"
-                        >
-                          <span>EDA Profile</span>
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
-                      </div>
                     </div>
-                    <div className="border border-border/50 rounded-2xl overflow-hidden bg-background">
-                      <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <div className="border border-border/60 rounded-3xl overflow-hidden surface-glass shadow-lg">
+                      <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
                         <Table className="w-full min-w-max">
-                          <TableHeader className="bg-secondary/30 sticky top-0 z-10">
-                            <TableRow className="border-border/50 hover:bg-transparent">
+                          <TableHeader className="bg-secondary/40 sticky top-0 z-10 backdrop-blur-md">
+                            <TableRow className="border-border/60 hover:bg-transparent">
                               {rawTableKeys.map((key) => (
                                 <TableHead
                                   key={key}
-                                  className="font-semibold text-foreground whitespace-nowrap px-6 py-4 h-auto text-sm uppercase tracking-widest"
+                                  className="font-bold text-foreground whitespace-nowrap px-6 py-5 h-auto text-xs uppercase tracking-[0.15em]"
                                 >
                                   {key.replace(/_/g, " ")}
                                 </TableHead>
@@ -627,12 +705,12 @@ export default function Dashboard() {
                             {rawData.map((row, i) => (
                               <TableRow
                                 key={i}
-                                className="border-border/50 hover:bg-secondary/20 transition-colors"
+                                className="border-border/40 hover:bg-secondary/20 transition-colors"
                               >
                                 {rawTableKeys.map((key) => (
                                   <TableCell
                                     key={key}
-                                    className="font-mono text-base px-6 py-4 whitespace-nowrap text-muted-foreground"
+                                    className="font-mono text-sm px-6 py-4 whitespace-nowrap text-muted-foreground"
                                   >
                                     {row[key] != null ? String(row[key]) : "—"}
                                   </TableCell>
@@ -651,30 +729,22 @@ export default function Dashboard() {
                   <div className="w-full">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                       <div>
-                        <h3 className="text-3xl md:text-4xl font-serif tracking-tight mb-3">
+                        <h3 className="text-3xl md:text-4xl font-serif font-bold tracking-tight mb-3 flex items-center gap-3">
+                          <ShieldCheck className="w-8 h-8 text-primary" />
                           Cleaned Data
                         </h3>
-                        <p className="text-lg text-muted-foreground">
+                        <p className="text-lg text-muted-foreground font-medium">
                           Processed data after remediation and quality
                           improvements.
                         </p>
                       </div>
-                      <div className="flex gap-4">
-                        <button
-                          onClick={() =>
-                            window.open("/api/eda-profile", "_blank")
-                          }
-                          className="flex items-center gap-2 text-sm font-semibold tracking-wide uppercase hover:text-primary transition-colors"
-                        >
-                          <span>EDA Profile</span>
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
+                      <div className="flex flex-wrap gap-4">
                         <button
                           onClick={() => downloadCleanedDataXlsx(cleanedData)}
-                          className="flex items-center gap-2 text-sm font-semibold tracking-wide uppercase hover:text-primary transition-colors"
+                          className="btn-secondary text-sm py-2.5 px-6 font-bold shadow-sm"
                         >
+                          <Download className="w-4 h-4 mr-2" />
                           <span>Download XLSX</span>
-                          <Download className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -830,19 +900,22 @@ export default function Dashboard() {
 
       {/* Retrieved Record Display */}
       {retrievedRecord && (
-        <section className="border-t border-border mt-12 bg-secondary/10 animate-in fade-in slide-in-from-bottom-16 duration-1000">
+        <section className="border-t border-border mt-12 bg-secondary/5 animate-in fade-in slide-in-from-bottom-16 duration-1000 relative">
+          <div className="absolute inset-0 bg-gradient-to-t from-transparent to-background/50 pointer-events-none -z-10" />
           <div className="container mx-auto px-6 py-24 md:py-32">
-            <div className="max-w-3xl mx-auto text-center">
+            <div className="max-w-4xl mx-auto surface-glass p-8 md:p-14 rounded-3xl border border-border/60 text-center relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] -z-10 group-hover:bg-emerald-500/10 transition-colors duration-500" />
               <Badge
                 variant="outline"
-                className="mb-6 bg-emerald-600/20 text-emerald-400 px-4 py-1.5 text-xs tracking-widest uppercase rounded-full border-emerald-600/30"
+                className="mb-8 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-5 py-2 text-xs tracking-[0.2em] font-bold uppercase rounded-full border-emerald-500/20 shadow-sm"
               >
                 Retrieved Successfully
               </Badge>
-              <h2 className="text-4xl md:text-6xl font-serif italic tracking-tight mb-4 text-foreground">
+              <h2 className="text-4xl md:text-6xl font-serif font-black tracking-tight mb-6 text-foreground">
                 {retrievedRecord.file_name}
               </h2>
-              <p className="text-lg text-muted-foreground font-serif mb-8">
+              <div className="flex flex-wrap items-center justify-center gap-3 text-sm md:text-base text-muted-foreground font-medium mb-12">
+                <span className="bg-secondary/30 px-3 py-1 rounded-md font-mono text-foreground">
                 {(() => {
                   const mime = retrievedRecord.file_type || "";
                   const map = {
@@ -855,7 +928,11 @@ export default function Dashboard() {
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
                   };
                   return map[mime.toLowerCase()] || mime.split("/").pop()?.toUpperCase() || retrievedRecord.file_name?.split(".").pop()?.toUpperCase() || "FILE";
-                })()} · {(() => {
+                })()}
+                </span>
+                <span>&middot;</span>
+                <span className="flex items-center gap-1.5 object-contain">
+                {(() => {
                   const src = retrievedRecord.source || "";
                   const sourceMap = {
                     "others_upload": "File Upload",
@@ -867,96 +944,112 @@ export default function Dashboard() {
                     "upload": "File Upload"
                   };
                   return sourceMap[src.toLowerCase()] || src.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-                })()} · Uploaded {new Date(retrievedRecord.upload_date).toLocaleDateString()}
-              </p>
+                })()}
+                </span>
+                <span>&middot;</span>
+                <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />Uploaded {new Date(retrievedRecord.upload_date).toLocaleDateString()}</span>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-12">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
                 {reportUrl && (
                   <a
                     href={reportUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border/50 bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+                    className="group/card flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-border/60 bg-background/80 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                   >
-                    <FileText className="w-8 h-8 text-primary group-hover:scale-110 transition-transform" />
-                    <span className="text-sm font-bold uppercase tracking-widest">Quality Report PDF</span>
-                    <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-hover/card:scale-110 transition-transform">
+                        <FileText className="w-8 h-8 text-primary" />
+                    </div>
+                    <span className="text-sm font-black uppercase tracking-widest text-foreground">Quality Report</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1 mt-auto">Open PDF <ExternalLink className="w-3 h-3" /></span>
                   </a>
                 )}
                 {edaUrl && (
                   <button
                     onClick={() => { setEdaViewerUrl(edaUrl); setEdaViewerTitle("EDA Profile (Cleaned)"); }}
-                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border/50 bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 cursor-pointer"
+                    className="group/card flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-border/60 bg-background/80 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer w-full"
                   >
-                    <Activity className="w-8 h-8 text-primary group-hover:scale-110 transition-transform" />
-                    <span className="text-sm font-bold uppercase tracking-widest">EDA Profile (Cleaned)</span>
-                    <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-hover/card:scale-110 transition-transform">
+                        <Activity className="w-8 h-8 text-primary" />
+                    </div>
+                    <span className="text-sm font-black uppercase tracking-widest text-foreground">Cleaned EDA</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1 mt-auto">View Profile <ExternalLink className="w-3 h-3" /></span>
                   </button>
                 )}
                 {rawEdaUrl && (
                   <button
                     onClick={() => { setEdaViewerUrl(rawEdaUrl); setEdaViewerTitle("EDA Profile (Raw)"); }}
-                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border/50 bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 cursor-pointer"
+                    className="group/card flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-border/60 bg-background/80 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer w-full"
                   >
-                    <Activity className="w-8 h-8 text-amber-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-sm font-bold uppercase tracking-widest">EDA Profile (Raw)</span>
-                    <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                    <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center group-hover/card:scale-110 transition-transform">
+                        <Activity className="w-8 h-8 text-amber-500" />
+                    </div>
+                    <span className="text-sm font-black uppercase tracking-widest text-foreground">Raw EDA</span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1 mt-auto">View Profile <ExternalLink className="w-3 h-3" /></span>
                   </button>
                 )}
               </div>
 
               {analysisId && (
-                <div className="p-6 bg-primary/5 rounded-3xl border-2 border-primary/20 flex flex-col items-center gap-4 w-full max-w-xl mx-auto mt-12 animate-in fade-in zoom-in duration-500 shadow-xl">
+                <div className="p-8 bg-primary/5 rounded-3xl border-2 border-primary/20 flex flex-col items-center gap-5 w-full max-w-xl mx-auto mt-16 shadow-inner">
                   <div className="text-center w-full">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Lock className="w-4 h-4 text-primary" />
+                    <div className="flex items-center justify-center gap-2 mb-3 mt-2">
+                       <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                        </span>
                       <p className="text-xs uppercase tracking-[0.2em] font-black text-primary">Analysis ID</p>
                     </div>
-                    <p className="text-xl font-mono font-bold text-foreground break-all bg-background/50 p-4 rounded-xl border border-border/50 select-all">{analysisId}</p>
+                    <p className="text-xl md:text-2xl font-mono font-black text-foreground break-all bg-background/80 p-5 rounded-2xl border border-border/80 select-all shadow-sm">{analysisId}</p>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => copyToClipboard(analysisId)}
-                    className="w-full h-12 rounded-xl flex items-center justify-center gap-3 hover:bg-primary hover:text-primary-foreground transition-all duration-300 group"
-                  >
-                    <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    <span className="font-bold uppercase tracking-widest">Copy Analysis ID</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => { setShowEmailInput(!showEmailInput); setEmailStatus(null); setEmailError(""); }}
-                    className="w-full h-12 rounded-xl flex items-center justify-center gap-3 hover:bg-primary hover:text-primary-foreground transition-all duration-300 group"
-                  >
-                    <Mail className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    <span className="font-bold uppercase tracking-widest">Email Analysis ID</span>
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full mt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => copyToClipboard(analysisId)}
+                        className="flex-1 h-14 rounded-xl flex items-center justify-center gap-3 hover:bg-primary/10 hover:text-primary hover:border-primary/50 transition-all duration-300 group border-2"
+                      >
+                        <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                        <span className="font-bold uppercase tracking-widest text-xs">Copy ID</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => { setShowEmailInput(!showEmailInput); setEmailStatus(null); setEmailError(""); }}
+                        className="flex-1 h-14 rounded-xl flex items-center justify-center gap-3 hover:bg-primary hover:text-primary-foreground transition-all duration-300 group border-2"
+                      >
+                        <Mail className="w-5 h-5 group-hover:scale-110 group-hover:-rotate-12 transition-transform" />
+                        <span className="font-bold uppercase tracking-widest text-xs">Email ID</span>
+                      </Button>
+                  </div>
                   {showEmailInput && (
-                    <div className="w-full mt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="w-full mt-4 animate-in fade-in slide-in-from-top-4 duration-300 bg-background/50 p-4 rounded-xl border border-border/50">
                       <div className="flex gap-2">
                         <Input
                           type="email"
-                          placeholder="Enter your email address"
+                          placeholder="Your email address"
                           value={emailAddress}
                           onChange={(e) => setEmailAddress(e.target.value)}
-                          className="flex-1 h-12 rounded-xl"
+                          className="flex-1 h-12 rounded-xl border-border/80 focus-visible:ring-primary/20"
                           disabled={emailSending}
                           onKeyDown={(e) => e.key === 'Enter' && handleSendEmail(analysisId)}
                         />
                         <Button
                           onClick={() => handleSendEmail(analysisId)}
                           disabled={emailSending || !emailAddress.trim()}
-                          className="h-12 rounded-xl px-6 font-bold uppercase tracking-widest"
+                          className="h-12 rounded-xl px-6 font-bold uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90"
                         >
-                          {emailSending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                          {emailSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                         </Button>
                       </div>
                       {emailStatus === 'sent' && (
-                        <p className="text-emerald-500 text-sm font-bold mt-2 flex items-center justify-center gap-2">
-                          <Check className="w-4 h-4" /> Analysis ID sent to your email!
+                        <p className="text-emerald-500 text-xs font-bold mt-4 flex items-center justify-center gap-2 bg-emerald-500/10 py-2 rounded-lg">
+                          <Check className="w-4 h-4" /> ID sent successfully!
                         </p>
                       )}
                       {emailStatus === 'error' && (
-                        <p className="text-destructive text-sm font-bold mt-2">⚠️ {emailError}</p>
+                        <p className="text-destructive text-xs font-bold mt-4 flex items-center justify-center gap-2 bg-destructive/10 py-2 rounded-lg">
+                          <AlertCircle className="w-4 h-4" /> {emailError}
+                        </p>
                       )}
                     </div>
                   )}
@@ -964,7 +1057,10 @@ export default function Dashboard() {
               )}
 
               {!reportUrl && !edaUrl && !rawEdaUrl && (
-                <p className="text-muted-foreground mt-8 text-lg">No cloud artifacts available for this analysis.</p>
+                <div className="mt-12 p-8 border border-border/50 rounded-2xl bg-secondary/10 flex flex-col items-center">
+                    <Database className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                    <p className="text-muted-foreground text-lg font-medium">No cloud artifacts available for this analysis.</p>
+                </div>
               )}
             </div>
           </div>
@@ -972,44 +1068,48 @@ export default function Dashboard() {
       )}
 
       {/* Private Retrieval Section */}
-      <section className="bg-muted/30 py-24 border-t border-border">
-        <div className="container mx-auto px-6 max-w-4xl text-center">
-          <div className="mb-12">
-            <h2 className="text-4xl font-serif mb-4 flex items-center justify-center gap-3">
-                <Lock className="w-8 h-8 text-primary" />
+      <section className="py-24 md:py-32 border-t border-border relative overflow-hidden">
+        <div className="absolute inset-0 bg-background" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+        <div className="container mx-auto px-6 max-w-4xl text-center relative z-10">
+          <div className="mb-14">
+            <h2 className="text-4xl md:text-5xl font-serif font-black tracking-tight mb-6 flex items-center justify-center gap-4 text-foreground">
+                <Lock className="w-10 h-10 text-primary" />
                 Private Report Retrieval
             </h2>
-            <p className="text-muted-foreground max-w-lg mx-auto">
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               Enter your unique Analysis ID to retrieve your persistent cloud reports. 
-              <span className="block mt-2 font-bold text-primary flex items-center justify-center gap-1">
-                <Clock className="w-4 h-4" /> Reports are automatically purged after 7 days for your privacy.
+              <span className="block mt-4 font-bold text-primary flex items-center justify-center gap-2 bg-primary/5 w-fit mx-auto px-4 py-2 rounded-full border border-primary/10 text-sm">
+                <Clock className="w-4 h-4" /> Reports are purged after 7 days for your privacy.
               </span>
             </p>
           </div>
 
-          <form onSubmit={handleRetrieve} className="flex gap-4 max-w-2xl mx-auto bg-background p-2 rounded-2xl border border-border shadow-sm">
+          <form onSubmit={handleRetrieve} className="flex flex-col sm:flex-row gap-4 max-w-3xl mx-auto">
             <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input 
                     placeholder="Paste your Analysis ID here..." 
                     value={searchId}
                     onChange={(e) => setSearchId(e.target.value)}
-                    className="border-none bg-transparent pl-11 h-12 focus-visible:ring-0 text-primary font-mono text-sm"
+                    className="border-2 border-border/80 bg-background/50 backdrop-blur-sm pl-14 h-16 rounded-2xl focus-visible:border-primary focus-visible:ring-primary/20 text-foreground font-mono text-lg shadow-sm w-full"
                 />
             </div>
             <Button 
                 type="submit" 
                 disabled={processing || !searchId.trim()}
-                className="rounded-xl h-12 px-8 font-bold uppercase tracking-widest"
+                className="btn-primary rounded-2xl h-16 px-10 font-black uppercase tracking-widest text-sm w-full sm:w-auto"
             >
-                {processing ? "Retrieving..." : "Retrieve"}
+                {processing ? <Loader2 className="w-6 h-6 animate-spin" /> : "Retrieve"}
             </Button>
           </form>
           
           {error && (
-              <p className="mt-6 text-destructive font-bold text-sm bg-destructive/5 py-4 rounded-xl border border-destructive/10 inline-block px-8">
-                  ⚠️ {error}
-              </p>
+              <div className="mt-8 animate-in fade-in slide-in-from-top-4">
+                  <p className="inline-flex items-center gap-2 text-destructive font-bold text-sm bg-destructive/10 py-3 px-6 rounded-xl border border-destructive/20 shadow-sm">
+                      <AlertCircle className="w-4 h-4" /> {error}
+                  </p>
+              </div>
           )}
         </div>
       </section>
