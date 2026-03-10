@@ -223,6 +223,12 @@ def get_both_reports():
         "cleaned_report": cleaned_report
     }
 
+
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
+
 @app.get("/api/report", summary="Get Latest Quality Report")
 async def api_report():
     """Return latest quality report as JSON for the React frontend."""
