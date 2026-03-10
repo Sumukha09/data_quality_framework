@@ -22,8 +22,21 @@ async def get_pool() -> asyncpg.Pool:
         db_url = os.getenv("SUPABASE_DB_URL")  # e.g. postgres://user:pass@host:5432/database
         if not db_url:
             raise RuntimeError("SUPABASE_DB_URL environment variable not set")
-        # Restrict pool size to avoid 'remaining connection slots are reserved for roles with the SUPERUSER attribute'
-        _pool = await asyncpg.create_pool(dsn=db_url, min_size=1, max_size=4)
+            
+        retries = 3
+        for attempt in range(retries):
+            try:
+                # Restrict pool size to avoid 'remaining connection slots are reserved for roles with the SUPERUSER attribute'
+                _pool = await asyncpg.create_pool(dsn=db_url, min_size=1, max_size=4)
+                break
+            except Exception as e:
+                import asyncio
+                if attempt == retries - 1:
+                    print(f"[!] Database Connection Exhausted: {e}")
+                    raise
+                print(f"[*] Database Connection Failed (Attempt {attempt+1}/{retries}): {e}. Retrying in {2 ** attempt}s...")
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
+                
     return _pool
 
 async def close_pool() -> None:

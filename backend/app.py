@@ -444,10 +444,22 @@ async def api_process(
         return JSONResponse(status_code=500, content={"success": False, "error": f"CANARY ERROR: {str(e)}"})
     finally:
         if file_path and os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except:
-                pass
+            import gc
+            import time
+            # Force garbage collection to release any unclosed file handles (like Pandas)
+            gc.collect()
+            
+            # Simple retry mechanism to handle lingering file locks
+            for _ in range(3):
+                try:
+                    os.remove(file_path)
+                    print(f"[*] Successfully cleaned up temp file: {file_path}")
+                    break
+                except Exception as e:
+                    print(f"[!] Cleanup retry failed for {file_path}: {e}")
+                    time.sleep(1.0)
+            else:
+                print(f"[!] Could not delete temp file after retries: {file_path}")
 
 @app.get("/legacy-dashboard", summary="Serve old dashboard")
 async def index():
