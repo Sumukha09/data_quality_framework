@@ -522,6 +522,50 @@ class EmailRequest(BaseModel):
 
 @app.post("/api/send-analysis-id", summary="Email the Analysis ID to the user")
 async def send_analysis_id(req: EmailRequest):
+    import re
+    import resend
+
+    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    if not email_pattern.match(req.email):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid email address format."})
+
+    uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+    if not uuid_pattern.match(req.analysis_id):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid Analysis ID format."})
+
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    if not resend.api_key:
+        return JSONResponse(status_code=500, content={"success": False, "error": "Email service is not configured."})
+
+    html_body = f"""
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #f8f9fa; border-radius: 16px; padding: 40px 32px; border: 1px solid #e9ecef;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <h2 style="color: #1a1a2e; font-size: 22px; margin: 0 0 4px 0;">Data Quality and Trustability</h2>
+            <p style="color: #6c757d; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin: 0;">Analysis ID Receipt</p>
+        </div>
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 2px solid #dee2e6; text-align: center; margin-bottom: 20px;">
+            <p style="color: #6c757d; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 12px 0; font-weight: 700;">Your Unique Analysis ID</p>
+            <p style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: bold; color: #1a1a2e; background: #f1f3f5; padding: 14px 16px; border-radius: 8px; margin: 0; word-break: break-all; border: 1px solid #dee2e6;">{req.analysis_id}</p>
+        </div>
+        <div style="background: #fff3cd; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; border: 1px solid #ffc107;">
+            <p style="color: #664d03; font-size: 13px; margin: 0;"><strong>⏳ Valid for 7 days.</strong> Use this ID on the Dashboard to retrieve your report.</p>
+        </div>
+        <p style="color: #adb5bd; font-size: 11px; text-align: center; margin: 0;">This is an automated message from the Data Quality Platform.</p>
+    </div>
+    """
+
+    try:
+        resend.Emails.send({
+            "from": "Data Quality Platform <onboarding@resend.dev>",
+            "to": req.email,
+            "subject": "Your Analysis ID",
+            "html": html_body,
+        })
+        print(f"[*] Analysis ID emailed to {req.email}")
+        return {"success": True, "message": "Analysis ID sent to your email."}
+    except Exception as e:
+        print(f"[!] Email send error: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Failed to send email: {str(e)}"})
     """Send the unique Analysis ID to the user's email address via SMTP."""
     import re
     import smtplib
